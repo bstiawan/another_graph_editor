@@ -1,6 +1,6 @@
 import { createTestCase } from "./createTestCase";
 import { EdgesParams, ParChildParams } from "./createTestCase";
-import { TestCase, TestCases } from "../types";
+import { TestCases } from "../types";
 
 export const initNameMap = new Map<string, string>();
 export const initPreviewMap = new Map<string, string>();
@@ -32,9 +32,7 @@ initBuildMap.set(
     setTabs: React.Dispatch<React.SetStateAction<number[]>>,
     setCurrentId: React.Dispatch<React.SetStateAction<number>>,
   ) => {
-    setTestCases(new Map<number, TestCase>());
-    setTabs([]);
-    let edges: EdgesParams = {
+    const edges: EdgesParams = {
       nodeLabels: "",
       roots: "",
       edges: "",
@@ -76,9 +74,7 @@ initBuildMap.set(
     setTabs: React.Dispatch<React.SetStateAction<number[]>>,
     setCurrentId: React.Dispatch<React.SetStateAction<number>>,
   ) => {
-    setTestCases(new Map<number, TestCase>());
-    setTabs([]);
-    let edges: EdgesParams = {
+    const edges: EdgesParams = {
       nodeLabels: "",
       roots: "",
       edges: "",
@@ -121,9 +117,7 @@ initBuildMap.set(
     setTabs: React.Dispatch<React.SetStateAction<number[]>>,
     setCurrentId: React.Dispatch<React.SetStateAction<number>>,
   ) => {
-    setTestCases(new Map<number, TestCase>());
-    setTabs([]);
-    let parChild: ParChildParams = {
+    const parChild: ParChildParams = {
       nodeLabels: "",
       roots: "",
       parent: "",
@@ -169,9 +163,7 @@ initBuildMap.set(
     setTabs: React.Dispatch<React.SetStateAction<number[]>>,
     setCurrentId: React.Dispatch<React.SetStateAction<number>>,
   ) => {
-    setTestCases(new Map<number, TestCase>());
-    setTabs([]);
-    let parChild: ParChildParams = {
+    const parChild: ParChildParams = {
       nodeLabels: "",
       roots: "",
       parent: "",
@@ -225,10 +217,8 @@ initBuildMap.set(
     setCurrentId: React.Dispatch<React.SetStateAction<number>>,
   ) => {
     let rowIdx = 0;
-    let tc = parseInt(rows[rowIdx++][0]);
+    const tc = parseInt(rows[rowIdx++][0]);
     if (tc == 0) return;
-    setTestCases(new Map<number, TestCase>());
-    setTabs([]);
     for (let i = 1; i <= tc; i++) {
       const offset = 50 * i;
       setTimeout(() => {
@@ -286,10 +276,8 @@ initBuildMap.set(
     setCurrentId: React.Dispatch<React.SetStateAction<number>>,
   ) => {
     let rowIdx = 0;
-    let tc = parseInt(rows[rowIdx++][0]);
+    const tc = parseInt(rows[rowIdx++][0]);
     if (tc == 0) return;
-    setTestCases(new Map<number, TestCase>());
-    setTabs([]);
     for (let i = 1; i <= tc; i++) {
       const offset = 50 * i;
       setTimeout(() => {
@@ -348,10 +336,8 @@ initBuildMap.set(
     setCurrentId: React.Dispatch<React.SetStateAction<number>>,
   ) => {
     let rowIdx = 0;
-    let tc = parseInt(rows[rowIdx++][0]);
+    const tc = parseInt(rows[rowIdx++][0]);
     if (tc == 0) return;
-    setTestCases(new Map<number, TestCase>());
-    setTabs([]);
     for (let i = 1; i <= tc; i++) {
       const offset = 50 * i;
       setTimeout(() => {
@@ -409,10 +395,8 @@ initBuildMap.set(
     setCurrentId: React.Dispatch<React.SetStateAction<number>>,
   ) => {
     let rowIdx = 0;
-    let tc = parseInt(rows[rowIdx++][0]);
+    const tc = parseInt(rows[rowIdx++][0]);
     if (tc == 0) return;
-    setTestCases(new Map<number, TestCase>());
-    setTabs([]);
     for (let i = 1; i <= tc; i++) {
       const offset = 50 * i;
       setTimeout(() => {
@@ -471,14 +455,12 @@ initBuildMap.set(
     setCurrentId: React.Dispatch<React.SetStateAction<number>>,
   ) => {
     let rowIdx = 0;
-    let tc = parseInt(rows[rowIdx++][0]);
+    const tc = parseInt(rows[rowIdx++][0]);
     if (tc == 0) return;
-    setTestCases(new Map<number, TestCase>());
-    setTabs([]);
     for (let i = 1; i <= tc; i++) {
       const offset = 50 * i;
       setTimeout(() => {
-        let parChild: ParChildParams = {
+        const parChild: ParChildParams = {
           nodeLabels: "",
           roots: "",
           parent: "",
@@ -535,14 +517,12 @@ initBuildMap.set(
     setCurrentId: React.Dispatch<React.SetStateAction<number>>,
   ) => {
     let rowIdx = 0;
-    let tc = parseInt(rows[rowIdx++][0]);
+    const tc = parseInt(rows[rowIdx++][0]);
     if (tc == 0) return;
-    setTestCases(new Map<number, TestCase>());
-    setTabs([]);
     for (let i = 1; i <= tc; i++) {
       const offset = 50 * i;
       setTimeout(() => {
-        let parChild: ParChildParams = {
+        const parChild: ParChildParams = {
           nodeLabels: "",
           roots: "",
           parent: "",

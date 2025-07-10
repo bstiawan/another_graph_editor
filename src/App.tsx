@@ -7,153 +7,141 @@ import { InitScreen } from "./components/InitScreen";
 import { RandomizerScreen } from "./components/RandomizerScreen";
 
 import { Settings } from "./types";
-import { SettingsFormat } from "./types";
 import { TestCase, TestCases } from "./types";
 import { Randomizer } from "./types";
 
 import { getDefaultGraph } from "./components/utils";
 
 import { useState } from "react";
+import { useUrlState } from "./hooks/useUrlState";
+import { useState as useReactState } from "react";
+
+// Move these outside the App function
+const defaultTestCases = new Map<number, TestCase>();
+defaultTestCases.set(0, {
+  graphEdges: getDefaultGraph(),
+  graphParChild: getDefaultGraph(),
+  inputFormat: "edges",
+});
+const defaultSettings: Settings = {
+  language: "en",
+  drawMode: "node",
+  expandedCanvas: false,
+  markBorder: "double",
+  markColor: 1,
+  labelOffset: 0,
+  darkMode: false,
+  nodeRadius: 16,
+  fontSize: 10,
+  nodeBorderWidthHalf: 1,
+  edgeLength: 10,
+  edgeLabelSeparation: 10,
+  penThickness: 1,
+  penTransparency: 0,
+  eraserRadius: 10,
+  testCaseBoundingBoxes: true,
+  showComponents: false,
+  showBridges: false,
+  showMSTs: false,
+  treeMode: false,
+  bipartiteMode: false,
+  lockMode: false,
+  markedNodes: false,
+  fixedMode: false,
+  multiedgeMode: true,
+  settingsFormat: "general",
+  gridMode: false,
+};
+const defaultRandomizer: Randomizer = {
+  indexing: 0,
+  nodeCount: "",
+  edgeCount: "",
+  connected: false,
+  tree: false,
+  hasNodeLabel: false,
+  nodeLabelMin: "",
+  nodeLabelMax: "",
+  hasEdgeLabel: false,
+  edgeLabelMin: "",
+  edgeLabelMax: "",
+};
 
 function App() {
+  // Remove old useState for testCases, settings, randomizer
+  // const [testCases, setTestCases] = useState<TestCases>(...);
+  // const [settings, setSettings] = useState<Settings>(...);
+  // const [randomizerConfig, setRandomizerConfig] = useState<Randomizer>(...);
+
+  // Default initial state for useUrlState
+  const [appState, setAppState, loading, error] = useUrlState({
+    testCases: defaultTestCases,
+    settings: defaultSettings,
+    randomizer: defaultRandomizer,
+  });
+
+  // Wrapper for setTestCases
+  const setTestCases: React.Dispatch<React.SetStateAction<TestCases>> = (value) => {
+    setAppState((prev) => ({
+      ...prev,
+      testCases: typeof value === "function" ? (value as (prev: TestCases) => TestCases)(prev.testCases) : value,
+    }));
+  };
+  // Wrapper for setSettings
+  const setSettings: React.Dispatch<React.SetStateAction<Settings>> = (value) => {
+    setAppState((prev) => ({
+      ...prev,
+      settings: typeof value === "function" ? (value as (prev: Settings) => Settings)(prev.settings) : value,
+    }));
+  };
+  // Wrapper for setRandomizerConfig
+  const setRandomizerConfig: React.Dispatch<React.SetStateAction<Randomizer>> = (value) => {
+    setAppState((prev) => ({
+      ...prev,
+      randomizer: typeof value === "function"
+        ? (value as (prev: Randomizer) => Randomizer)(prev.randomizer ?? defaultRandomizer)
+        : value,
+    }));
+  };
+
+  // Keep other state as is
   const [testCaseNumber, setTestCaseNumber] = useState<number>(0);
   const [currentId, setCurrentId] = useState<number>(0);
-  const [testCases, setTestCases] = useState<TestCases>(() => {
-    const init = new Map<number, TestCase>();
-    init.set(0, {
-      graphEdges: getDefaultGraph(),
-      graphParChild: getDefaultGraph(),
-      inputFormat: "edges",
-    });
-    return init;
-  });
-
   const [directed, setDirected] = useState<boolean>(false);
-
   const [tabs, setTabs] = useState<number[]>([0]);
   const [inputs, setInputs] = useState<number[]>([0]);
-
-  const [settings, setSettings] = useState<Settings>({
-    language:
-      localStorage.getItem("language") !== null
-        ? (localStorage.getItem("language")! as "en" | "cn")
-        : "en",
-    drawMode: "node",
-    expandedCanvas: false,
-    markBorder: "double",
-    markColor: 1,
-    labelOffset: 0,
-    darkMode:
-      localStorage.getItem("darkMode") !== null
-        ? localStorage.getItem("darkMode") === "true"
-        : false,
-    nodeRadius:
-      localStorage.getItem("nodeRadius") !== null
-        ? Number.parseInt(localStorage.getItem("nodeRadius")!)
-        : 16,
-    fontSize:
-      localStorage.getItem("fontSize") !== null
-        ? Number.parseInt(localStorage.getItem("fontSize")!)
-        : 10,
-    nodeBorderWidthHalf:
-      localStorage.getItem("nodeBorderWidthHalf") !== null
-        ? Number.parseFloat(localStorage.getItem("nodeBorderWidthHalf")!)
-        : 1,
-    edgeLength:
-      localStorage.getItem("edgeLength") !== null
-        ? Number.parseFloat(localStorage.getItem("edgeLength")!)
-        : 10,
-    edgeLabelSeparation:
-      localStorage.getItem("edgeLabelSeparation") !== null
-        ? Number.parseFloat(localStorage.getItem("edgeLabelSeparation")!)
-        : 10,
-    penThickness:
-      localStorage.getItem("penThickness") !== null
-        ? Number.parseFloat(localStorage.getItem("penThickness")!)
-        : 1,
-    penTransparency:
-      localStorage.getItem("penTransparency") !== null
-        ? Number.parseFloat(localStorage.getItem("penTransparency")!)
-        : 0,
-    eraserRadius:
-      localStorage.getItem("eraserRadius") !== null
-        ? Number.parseFloat(localStorage.getItem("eraserRadius")!)
-        : 10,
-    testCaseBoundingBoxes: true,
-    showComponents: false,
-    showBridges: false,
-    showMSTs: false,
-    treeMode: false,
-    bipartiteMode: false,
-    lockMode: false,
-    markedNodes:
-      localStorage.getItem("markedNodes") !== null
-        ? localStorage.getItem("markedNodes") == "true"
-        : false,
-    fixedMode: false,
-    multiedgeMode: true,
-    settingsFormat:
-      localStorage.getItem("settingsFormat") !== null
-        ? (localStorage.getItem("settingsFormat") as SettingsFormat)
-        : "general",
-    gridMode: false,
-  });
-
   const [init, setInit] = useState<boolean>(false);
   const [randomizer, setRandomizer] = useState<boolean>(false);
+  const [copySuccess, setCopySuccess] = useReactState<string | null>(null);
 
-  const [randomizerConfig, setRandomizerConfig] = useState<Randomizer>({
-    indexing:
-      localStorage.getItem("randomizerIndexing") !== null
-        ? parseInt(localStorage.getItem("randomizerIndexing")!)
-        : 0,
-    nodeCount:
-      localStorage.getItem("randomizerNodeCount") !== null
-        ? localStorage.getItem("randomizerNodeCount")!
-        : "",
-    edgeCount:
-      localStorage.getItem("randomizerEdgeCount") !== null
-        ? localStorage.getItem("randomizerEdgeCount")!
-        : "",
-    connected:
-      localStorage.getItem("randomizerConnected") !== null
-        ? localStorage.getItem("randomizerConnected")! == "true"
-        : false,
-    tree:
-      localStorage.getItem("randomizerTree") !== null
-        ? localStorage.getItem("randomizerTree")! == "true"
-        : false,
-    hasNodeLabel:
-      localStorage.getItem("randomizerHasNodeLabel") !== null
-        ? localStorage.getItem("randomizerHasNodeLabel")! == "true"
-        : false,
-    nodeLabelMin:
-      localStorage.getItem("randomizerNodeLabelMin") !== null
-        ? localStorage.getItem("randomizerNodeLabelMin")!
-        : "",
-    nodeLabelMax:
-      localStorage.getItem("randomizerNodeLabelMax") !== null
-        ? localStorage.getItem("randomizerNodeLabelMax")!
-        : "",
-    hasEdgeLabel:
-      localStorage.getItem("randomizerHasEdgeLabel") !== null
-        ? localStorage.getItem("randomizerHasEdgeLabel")! == "true"
-        : false,
-    edgeLabelMin:
-      localStorage.getItem("randomizerEdgeLabelMin") !== null
-        ? localStorage.getItem("randomizerEdgeLabelMin")!
-        : "",
-    edgeLabelMax:
-      localStorage.getItem("randomizerEdgeLabelMax") !== null
-        ? localStorage.getItem("randomizerEdgeLabelMax")!
-        : "",
-  });
+  // Copy URL handler
+  const handleCopyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopySuccess("URL copied!");
+      setTimeout(() => setCopySuccess(null), 1500);
+    } catch {
+      setCopySuccess("Failed to copy");
+      setTimeout(() => setCopySuccess(null), 1500);
+    }
+  };
+
+  // Loading and error UI
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+  if (error) {
+    return <div>Error: {error}</div>;
+  }
+
+  // Use appState.testCases, appState.settings, appState.randomizer in the rest of the component
+  // Pass setTestCases, setSettings, setRandomizerConfig to children instead of setAppState
+  // ... existing code ...
 
   return (
     <>
       <div
         className={
-          settings.darkMode
+          appState.settings.darkMode
             ? `dark bg-ovr text-text absolute w-full overflow-scroll
               no-scrollbar`
             : `light bg-ovr text-text absolute w-full overflow-scroll
@@ -166,7 +154,18 @@ function App() {
             px-2 py-1 justify-between items-center hover:border-border-hover
             z-20 bg-block group h-9"
         >
-          {settings.language == "en" ? "Changelog" : "更新记录"}
+          {appState.settings.language == "en" ? "Changelog" : "更新记录"}
+          {/* Copy URL button */}
+          <button
+            className="ml-2 px-2 py-1 border rounded bg-format-ok text-white hover:bg-format-ok-hover"
+            onClick={handleCopyUrl}
+            title="Copy current URL to clipboard"
+          >
+            {appState.settings.language == "en" ? "Copy URL" : "复制链接"}
+          </button>
+          {copySuccess && (
+            <span className="ml-2 text-green-500">{copySuccess}</span>
+          )}
           <div
             className="absolute border-2 text-sm px-2 py-1 border-border-hover
               rounded-lg bg-block left-0 top-8 w-100 invisible
@@ -256,11 +255,10 @@ function App() {
           >
             <button
               className={
-                settings.language == "en" ? "text-selected" : "text-text"
+                appState.settings.language == "en" ? "text-selected" : "text-text"
               }
               onClick={() => {
-                setSettings({ ...settings, language: "en" });
-                localStorage.setItem("language", "en");
+                setSettings((prev) => ({ ...prev, language: "en" }));
               }}
             >
               EN
@@ -268,11 +266,10 @@ function App() {
             <div>|</div>
             <button
               className={
-                settings.language == "cn" ? "text-selected" : "text-text"
+                appState.settings.language == "cn" ? "text-selected" : "text-text"
               }
               onClick={() => {
-                setSettings({ ...settings, language: "cn" });
-                localStorage.setItem("language", "cn");
+                setSettings((prev) => ({ ...prev, language: "cn" }));
               }}
             >
               中文
@@ -284,7 +281,7 @@ function App() {
               bg-block h-9"
             href="https://github.com/anAcc22/another_graph_editor"
           >
-            {settings.darkMode ? (
+            {appState.settings.darkMode ? (
               <img
                 width={18}
                 src="github-mark/github-mark-white.svg"
@@ -303,7 +300,7 @@ function App() {
 
         {init ? (
           <InitScreen
-            settings={settings}
+            settings={appState.settings}
             setInit={setInit}
             testCaseNumber={testCaseNumber}
             setTestCaseNumber={setTestCaseNumber}
@@ -317,9 +314,9 @@ function App() {
 
         {randomizer ? (
           <RandomizerScreen
-            settings={settings}
+            settings={appState.settings}
             setRandomizer={setRandomizer}
-            randomizerConfig={randomizerConfig}
+            randomizerConfig={appState.randomizer ?? defaultRandomizer}
             setRandomizerConfig={setRandomizerConfig}
           />
         ) : (
@@ -327,12 +324,12 @@ function App() {
         )}
 
         <InputTabs
-          settings={settings}
+          settings={appState.settings}
           tabs={tabs}
           setTabs={setTabs}
           inputs={inputs}
           setInputs={setInputs}
-          testCases={testCases}
+          testCases={appState.testCases}
           setTestCases={setTestCases}
           testCaseNumber={testCaseNumber}
           setTestCaseNumber={setTestCaseNumber}
@@ -342,24 +339,24 @@ function App() {
           setDirected={setDirected}
           setInit={setInit}
           setRandomizer={setRandomizer}
-          randomizerConfig={randomizerConfig}
+          randomizerConfig={appState.randomizer ?? defaultRandomizer}
         />
 
         <div className="relative z-0">
           <GraphCanvas
-            testCases={testCases}
+            testCases={appState.testCases}
             directed={directed}
-            settings={settings}
+            settings={appState.settings}
             setSettings={setSettings}
           />
         </div>
 
-        {settings.expandedCanvas ? (
+        {appState.settings.expandedCanvas ? (
           <></>
         ) : (
           <GraphSettings
             directed={directed}
-            settings={settings}
+            settings={appState.settings}
             setSettings={setSettings}
           />
         )}

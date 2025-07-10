@@ -34,49 +34,55 @@ export function GraphInput({
   setRandomizer,
   randomizerConfig,
 }: Props) {
+  const testCase = testCases.get(inputId);
   const [inputStatus, setInputStatus] = useState<boolean>(true);
   const [randomizerError, setRandomizerError] = useState<string | undefined>(
     undefined,
   );
 
+  // Local state for all input fields
+  const [edges, setEdges] = useState("");
+  const [rootsEdges, setRootsEdges] = useState("");
+  const [nodeLabelsEdges, setNodeLabelsEdges] = useState("");
+  const [parent, setParent] = useState("");
+  const [child, setChild] = useState("");
+  const [edgeLabels, setEdgeLabels] = useState("");
+  const [rootsParChild, setRootsParChild] = useState("");
+  const [nodeLabelsParChild, setNodeLabelsParChild] = useState("");
+
+  // Sync local state with testCases when inputId or testCases change
+  useEffect(() => {
+    if (!testCase) return;
+    setEdges(testCase.graphEdges?.edges?.join("\n") || "");
+    setNodeLabelsEdges(
+      testCase.graphEdges?.nodeLabels
+        ? Array.from(testCase.graphEdges.nodeLabels.values()).join(" ")
+        : ""
+    );
+    setNodeLabelsParChild(
+      testCase.graphParChild?.nodeLabels
+        ? Array.from(testCase.graphParChild.nodeLabels.values()).join(" ")
+        : ""
+    );
+    setEdgeLabels(
+      testCase.graphParChild?.edgeLabels
+        ? Array.from(testCase.graphParChild.edgeLabels.values()).join(" ")
+        : ""
+    );
+    // Do NOT sync rootsEdges, rootsParChild, parent, child from testCase.graph* (not present on Graph)
+    // These are only managed in local state and updated via user input or when a new test case is created
+  }, [testCase, inputId]);
+
   const processGraphInput = () => {
-    if (testCases.get(inputId) === undefined) return;
-    const inputFormat = testCases.get(inputId)!.inputFormat;
-
+    if (!testCase) return;
+    const inputFormat = testCase.inputFormat;
     let parsedGraph: ParsedGraph;
-
     let roots = "";
-
     if (!directed) {
-      roots =
-        inputFormat === "edges"
-          ? (
-              document.getElementById(
-                "graphInputRootsEdges" + inputId,
-              ) as HTMLTextAreaElement
-            ).value
-          : (
-              document.getElementById(
-                "graphInputRootsParChild" + inputId,
-              ) as HTMLTextAreaElement
-            ).value;
+      roots = inputFormat === "edges" ? rootsEdges : rootsParChild;
     }
-
     if (inputFormat === "edges") {
-      parsedGraph = parseGraphInputEdges(
-        roots,
-        (
-          document.getElementById(
-            "graphInputEdges" + inputId,
-          ) as HTMLTextAreaElement
-        ).value,
-        (
-          document.getElementById(
-            "graphInputNodeLabelsEdges" + inputId,
-          ) as HTMLTextAreaElement
-        ).value,
-        inputId,
-      );
+      parsedGraph = parseGraphInputEdges(roots, edges, nodeLabelsEdges, inputId);
       if (parsedGraph.status === "BAD") {
         setInputStatus(false);
       } else {
@@ -84,8 +90,8 @@ export function GraphInput({
         setTestCases((testCases) => {
           const newTestCases = new Map(testCases);
           newTestCases.set(inputId, {
+            ...testCase,
             graphEdges: parsedGraph.graph!,
-            graphParChild: newTestCases.get(inputId)!.graphParChild!,
             inputFormat: "edges",
           });
           return newTestCases;
@@ -94,27 +100,11 @@ export function GraphInput({
     } else {
       parsedGraph = parseGraphInputParentChild(
         roots,
-        (
-          document.getElementById(
-            "graphInputParent" + inputId,
-          ) as HTMLTextAreaElement
-        ).value,
-        (
-          document.getElementById(
-            "graphInputChild" + inputId,
-          ) as HTMLTextAreaElement
-        ).value,
-        (
-          document.getElementById(
-            "graphInputEdgeLabels" + inputId,
-          ) as HTMLTextAreaElement
-        ).value,
-        (
-          document.getElementById(
-            "graphInputNodeLabelsParChild" + inputId,
-          ) as HTMLTextAreaElement
-        ).value,
-        inputId,
+        parent,
+        child,
+        edgeLabels,
+        nodeLabelsParChild,
+        inputId
       );
       if (parsedGraph.status === "BAD") {
         setInputStatus(false);
@@ -123,7 +113,7 @@ export function GraphInput({
         setTestCases((testCases) => {
           const newTestCases = new Map(testCases);
           newTestCases.set(inputId, {
-            graphEdges: newTestCases.get(inputId)!.graphEdges!,
+            ...testCase,
             graphParChild: parsedGraph.graph!,
             inputFormat: "parentChild",
           });
@@ -138,54 +128,33 @@ export function GraphInput({
   }, []);
 
   const processNodeLabels = () => {
-    if (testCases.get(inputId) === undefined) return;
-    const inputFormat = testCases.get(inputId)!.inputFormat;
-
-    let currentNodes = (
-      document.getElementById(
-        "graphInputCurrentNodes" + inputId,
-      ) as HTMLTextAreaElement
-    ).value
-      .trim()
-      .split(/\s+/)
-      .filter((u) => u.length);
-
-    currentNodes = sortNodes(currentNodes);
-    currentNodes = currentNodes.map((u) => padNode(u, inputId, inputFormat));
-
-    const nodeLabels = (
+    if (!testCase) return;
+    const inputFormat = testCase.inputFormat;
+    let currentNodes =
       inputFormat === "edges"
-        ? (document.getElementById(
-            "graphInputNodeLabelsEdges" + inputId,
-          ) as HTMLTextAreaElement)
-        : (document.getElementById(
-            "graphInputNodeLabelsParChild" + inputId,
-          ) as HTMLTextAreaElement)
-    ).value
-      .trim()
-      .split(/\s+/)
-      .filter((u) => u.length);
-
+        ? sortNodes(testCase.graphEdges.nodes)
+        : sortNodes(testCase.graphParChild.nodes);
+    currentNodes = currentNodes.map((u) => padNode(u, inputId, inputFormat));
+    const nodeLabels =
+      inputFormat === "edges"
+        ? nodeLabelsEdges.trim().split(/\s+/).filter((u) => u.length)
+        : nodeLabelsParChild.trim().split(/\s+/).filter((u) => u.length);
     const len = Math.min(currentNodes.length, nodeLabels.length);
-
-    let mp = new Map<string, string>();
-
+    const mp = new Map<string, string>();
     for (let i = 0; i < len; i++) {
       if (nodeLabels[i] !== "_") {
         mp.set(currentNodes[i], nodeLabels[i]);
       }
     }
-
     if (inputFormat === "edges") {
       setTestCases((testCases) => {
         const newTestCases = new Map(testCases);
         newTestCases.set(inputId, {
+          ...testCase,
           graphEdges: {
-            ...newTestCases.get(inputId)!.graphEdges!,
+            ...testCase.graphEdges!,
             nodeLabels: mp,
           },
-          graphParChild: newTestCases.get(inputId)!.graphParChild!,
-          inputFormat: "edges",
         });
         return newTestCases;
       });
@@ -193,12 +162,11 @@ export function GraphInput({
       setTestCases((testCases) => {
         const newTestCases = new Map(testCases);
         newTestCases.set(inputId, {
-          graphEdges: newTestCases.get(inputId)!.graphEdges!,
+          ...testCase,
           graphParChild: {
-            ...newTestCases.get(inputId)!.graphParChild!,
+            ...testCase.graphParChild!,
             nodeLabels: mp,
           },
-          inputFormat: "parentChild",
         });
         return newTestCases;
       });
@@ -234,13 +202,11 @@ export function GraphInput({
           id={"graphInputCurrentNodes" + inputId}
           onChange={processNodeLabels}
           value={
-            testCases.get(inputId) === undefined
+            testCase === undefined
               ? ""
-              : testCases.get(inputId)!.inputFormat === "edges"
-                ? sortNodes(testCases.get(inputId)!.graphEdges.nodes).join(" ")
-                : sortNodes(testCases.get(inputId)!.graphParChild.nodes).join(
-                    " ",
-                  )
+              : testCase.inputFormat === "edges"
+                ? sortNodes(testCase.graphEdges.nodes).join(" ")
+                : sortNodes(testCase.graphParChild.nodes).join(" ")
           }
           readOnly
           className="bg-ovr font-semibold font-jetbrains resize-none border-2
@@ -256,7 +222,7 @@ export function GraphInput({
           name="graphInputNodeLabelsEdges"
           id={"graphInputNodeLabelsEdges" + inputId}
           rows={1}
-          onChange={processNodeLabels}
+          onChange={(e) => setNodeLabelsEdges(e.target.value)}
           onKeyDown={handleTextAreaKeyDown}
           placeholder={
             settings.language == "en"
@@ -264,7 +230,7 @@ export function GraphInput({
               : "提示：'_' -> 空标签"
           }
           className={
-            testCases.get(inputId)?.inputFormat === "edges"
+            testCase?.inputFormat === "edges"
               ? `bg-ovr font-semibold font-jetbrains resize-none border-2
                 rounded-md px-2 py-1 border-single focus:outline-none text-lg
                 border-border focus:border-border-active placeholder-placeholder
@@ -277,7 +243,7 @@ export function GraphInput({
           name="graphInputNodeLabelsParChild"
           id={"graphInputNodeLabelsParChild" + inputId}
           rows={1}
-          onChange={processNodeLabels}
+          onChange={(e) => setNodeLabelsParChild(e.target.value)}
           onKeyDown={handleTextAreaKeyDown}
           placeholder={
             settings.language == "en"
@@ -285,7 +251,7 @@ export function GraphInput({
               : "提示：'_' -> 空标签"
           }
           className={
-            testCases.get(inputId)?.inputFormat === "parentChild"
+            testCase?.inputFormat === "parentChild"
               ? `bg-ovr font-semibold font-jetbrains resize-none border-2
                 rounded-md px-2 py-1 border-single focus:outline-none text-lg
                 border-border focus:border-border-active placeholder-placeholder
@@ -299,7 +265,7 @@ export function GraphInput({
         <div className="flex font-light text-sm justify-between">
           <span>
             <span>
-              {testCases.get(inputId)?.inputFormat === "edges" ? (
+              {testCase?.inputFormat === "edges" ? (
                 <span className="text-selected p-0 hover:cursor-pointer">
                   {settings.language == "en" ? "Edges" : "边集"}
                 </span>
@@ -317,7 +283,7 @@ export function GraphInput({
                       });
                       return newTestCases;
                     });
-                    let checkbox = document.getElementById(
+                    const checkbox = document.getElementById(
                       "inputFormatCheckbox" + inputId,
                     ) as HTMLInputElement;
                     checkbox.checked = false;
@@ -329,7 +295,7 @@ export function GraphInput({
             </span>
             <span> | </span>
             <span>
-              {testCases.get(inputId)?.inputFormat === "parentChild" ? (
+              {testCase?.inputFormat === "parentChild" ? (
                 <span className="text-selected p-0 hover:cursor-pointer">
                   {settings.language == "en" ? "Parent-Child" : "父亲-子节点"}
                 </span>
@@ -347,7 +313,7 @@ export function GraphInput({
                       });
                       return newTestCases;
                     });
-                    let checkbox = document.getElementById(
+                    const checkbox = document.getElementById(
                       "inputFormatCheckbox" + inputId,
                     ) as HTMLInputElement;
                     checkbox.checked = true;
@@ -376,7 +342,7 @@ export function GraphInput({
               }}
               type="checkbox"
               defaultChecked={
-                testCases.get(inputId)?.inputFormat === "parentChild"
+                testCase?.inputFormat === "parentChild"
               }
               id={"inputFormatCheckbox" + inputId}
               className="peer invisible"
@@ -406,7 +372,7 @@ export function GraphInput({
                   className="p-0 hover:cursor-pointer"
                   onClick={() => {
                     setDirected(false);
-                    let checkbox = document.getElementById(
+                    const checkbox = document.getElementById(
                       "directedCheckbox" + inputId,
                     ) as HTMLInputElement;
                     checkbox.checked = false;
@@ -427,7 +393,7 @@ export function GraphInput({
                   className="p-0 hover:cursor-pointer"
                   onClick={() => {
                     setDirected(true);
-                    let checkbox = document.getElementById(
+                    const checkbox = document.getElementById(
                       "directedCheckbox" + inputId,
                     ) as HTMLInputElement;
                     checkbox.checked = true;
@@ -463,7 +429,7 @@ export function GraphInput({
 
         <h4
           className={
-            !directed && testCases.get(inputId)?.inputFormat === "edges"
+            !directed && testCase?.inputFormat === "edges"
               ? "text-base font-semibold"
               : "hidden"
           }
@@ -475,10 +441,10 @@ export function GraphInput({
           name="graphInputRootsEdges"
           id={"graphInputRootsEdges" + inputId}
           rows={1}
-          onChange={processGraphInput}
+          onChange={(e) => setRootsEdges(e.target.value)}
           onKeyDown={handleTextAreaKeyDown}
           className={
-            !directed && testCases.get(inputId)?.inputFormat === "edges"
+            !directed && testCase?.inputFormat === "edges"
               ? `bg-ovr font-semibold font-jetbrains resize-none border-2
                 rounded-md px-2 py-1 border-single focus:outline-none text-lg
                 border-border focus:border-border-active w-auto no-scrollbar`
@@ -488,7 +454,7 @@ export function GraphInput({
 
         <h4
           className={
-            !directed && testCases.get(inputId)?.inputFormat === "parentChild"
+            !directed && testCase?.inputFormat === "parentChild"
               ? "text-base font-semibold"
               : "hidden"
           }
@@ -500,10 +466,10 @@ export function GraphInput({
           name="graphInputRootsParChild"
           id={"graphInputRootsParChild" + inputId}
           rows={1}
-          onChange={processGraphInput}
+          onChange={(e) => setRootsParChild(e.target.value)}
           onKeyDown={handleTextAreaKeyDown}
           className={
-            !directed && testCases.get(inputId)?.inputFormat === "parentChild"
+            !directed && testCase?.inputFormat === "parentChild"
               ? `bg-ovr font-semibold font-jetbrains resize-none border-2
                 rounded-md px-2 py-1 border-single focus:outline-none text-lg
                 border-border focus:border-border-active w-auto no-scrollbar`
@@ -513,7 +479,7 @@ export function GraphInput({
 
         <h4
           className={
-            testCases.get(inputId)?.inputFormat === "edges"
+            testCase?.inputFormat === "edges"
               ? "text-base font-semibold"
               : "hidden"
           }
@@ -524,11 +490,11 @@ export function GraphInput({
           wrap="off"
           name="graphInputEdges"
           id={"graphInputEdges" + inputId}
-          onChange={processGraphInput}
+          onChange={(e) => setEdges(e.target.value)}
           onKeyDown={handleTextAreaKeyDown}
           rows={8}
           className={
-            testCases.get(inputId)?.inputFormat === "edges"
+            testCase?.inputFormat === "edges"
               ? `font-semibold font-jetbrains resize-none border-2 rounded-md
                 px-2 py-1 border-single focus:outline-none text-lg border-border
                 focus:border-border-active bg-ovr w-auto no-scrollbar`
@@ -538,7 +504,7 @@ export function GraphInput({
 
         <h4
           className={
-            testCases.get(inputId)?.inputFormat === "parentChild"
+            testCase?.inputFormat === "parentChild"
               ? "text-base font-semibold"
               : "hidden"
           }
@@ -550,10 +516,10 @@ export function GraphInput({
           name="graphInputParent"
           id={"graphInputParent" + inputId}
           rows={1}
-          onChange={processGraphInput}
+          onChange={(e) => setParent(e.target.value)}
           onKeyDown={handleTextAreaKeyDown}
           className={
-            testCases.get(inputId)?.inputFormat === "parentChild"
+            testCase?.inputFormat === "parentChild"
               ? `bg-ovr font-semibold font-jetbrains resize-none border-2
                 rounded-md px-2 py-1 border-single focus:outline-none text-lg
                 border-border focus:border-border-active w-auto no-scrollbar`
@@ -563,7 +529,7 @@ export function GraphInput({
 
         <h4
           className={
-            testCases.get(inputId)?.inputFormat === "parentChild"
+            testCase?.inputFormat === "parentChild"
               ? "text-base font-semibold"
               : "hidden"
           }
@@ -576,10 +542,10 @@ export function GraphInput({
           id={"graphInputChild" + inputId}
           rows={1}
           defaultValue={"1 2 3 4 5 6 7 8 9"}
-          onChange={processGraphInput}
+          onChange={(e) => setChild(e.target.value)}
           onKeyDown={handleTextAreaKeyDown}
           className={
-            testCases.get(inputId)?.inputFormat === "parentChild"
+            testCase?.inputFormat === "parentChild"
               ? `bg-ovr font-semibold font-jetbrains resize-none border-2
                 rounded-md px-2 py-1 border-single focus:outline-none text-lg
                 border-border focus:border-border-active w-auto no-scrollbar`
@@ -589,7 +555,7 @@ export function GraphInput({
 
         <h4
           className={
-            testCases.get(inputId)?.inputFormat === "parentChild"
+            testCase?.inputFormat === "parentChild"
               ? "text-base font-semibold"
               : "hidden"
           }
@@ -601,10 +567,10 @@ export function GraphInput({
           name="graphInputEdgeLabels"
           id={"graphInputEdgeLabels" + inputId}
           rows={1}
-          onChange={processGraphInput}
+          onChange={(e) => setEdgeLabels(e.target.value)}
           onKeyDown={handleTextAreaKeyDown}
           className={
-            testCases.get(inputId)?.inputFormat === "parentChild"
+            testCase?.inputFormat === "parentChild"
               ? `bg-ovr font-semibold font-jetbrains resize-none border-2
                 rounded-md px-2 py-1 border-single focus:outline-none text-lg
                 border-border focus:border-border-active w-auto no-scrollbar`
@@ -617,18 +583,10 @@ export function GraphInput({
             className="bg-clear-normal hover:bg-clear-hover
               active:bg-clear-active inline rounded-md px-2 py-1"
             onClick={() => {
-              if (testCases.get(inputId)?.inputFormat === "edges") {
-                (
-                  document.getElementById(
-                    "graphInputEdges" + inputId,
-                  ) as HTMLTextAreaElement
-                ).value = "";
+              if (testCase?.inputFormat === "edges") {
+                setEdges("");
               } else {
-                (
-                  document.getElementById(
-                    "graphInputParent" + inputId,
-                  ) as HTMLTextAreaElement
-                ).value = "";
+                setParent("");
               }
               processGraphInput();
             }}
@@ -657,7 +615,7 @@ export function GraphInput({
             <button
               className="hover:opacity-50 active:text-randomize"
               onClick={() => {
-                const inputFormat = testCases.get(inputId)!.inputFormat;
+                const inputFormat = testCase!.inputFormat;
                 try {
                   const graphEdges = generateRandomGraph(randomizerConfig);
                   let nodeLabels = "";
@@ -692,31 +650,21 @@ export function GraphInput({
                     left.delete(e[1]);
                   }
                   if (inputFormat === "edges") {
-                    let edges = document.getElementById(
-                      "graphInputEdges" + inputId,
-                    ) as HTMLTextAreaElement;
-                    let ans = "";
-                    for (const u of left) ans += u + "\n";
-                    for (let i = 0; i < graphEdges.length; i++) {
-                      ans += graphEdges[i].join(" ");
-                      if (randomizerConfig.hasEdgeLabel) {
-                        ans += " " + randInt(edgeL, edgeR);
+                    const edgesStr = (() => {
+                      let ans = "";
+                      for (const u of left) ans += u + "\n";
+                      for (let i = 0; i < graphEdges.length; i++) {
+                        ans += graphEdges[i].join(" ");
+                        if (randomizerConfig.hasEdgeLabel) {
+                          ans += " " + randInt(edgeL, edgeR);
+                        }
+                        if (i != graphEdges.length - 1) ans += "\n";
                       }
-                      if (i != graphEdges.length - 1) ans += "\n";
-                    }
-                    edges.value = ans;
-                    (
-                      document.getElementById(
-                        "graphInputNodeLabelsEdges" + inputId,
-                      ) as HTMLTextAreaElement
-                    ).value = nodeLabels;
+                      return ans;
+                    })();
+                    setEdges(edgesStr);
+                    setNodeLabelsEdges(nodeLabels);
                   } else {
-                    let ps = document.getElementById(
-                      "graphInputParent" + inputId,
-                    ) as HTMLTextAreaElement;
-                    let cs = document.getElementById(
-                      "graphInputChild" + inputId,
-                    ) as HTMLTextAreaElement;
                     let pAns = "";
                     let cAns = "";
                     let eAns = "";
@@ -738,59 +686,81 @@ export function GraphInput({
                       pAns += " " + u;
                       cAns += " " + u;
                     }
-                    ps.value = pAns;
-                    cs.value = cAns;
-                    (
-                      document.getElementById(
-                        "graphInputNodeLabelsParChild" + inputId,
-                      ) as HTMLTextAreaElement
-                    ).value = nodeLabels;
-                    (
-                      document.getElementById(
-                        "graphInputEdgeLabels" + inputId,
-                      ) as HTMLTextAreaElement
-                    ).value = eAns;
+                    setParent(pAns);
+                    setChild(cAns);
+                    setNodeLabelsParChild(nodeLabels);
+                    setEdgeLabels(eAns);
                   }
                   setRandomizerError(undefined);
                   processGraphInput();
-                } catch (error: any) {
+                } catch (error: unknown) {
                   console.log(error);
-                  if (error.message === `n must be an integer >= 0!`) {
+                  if (
+                    typeof error === "object" &&
+                    error !== null &&
+                    "message" in error &&
+                    (error as { message: string }).message === `n must be an integer >= 0!`
+                  ) {
                     setRandomizerError(
                       settings.language === "en"
                         ? `n must be an integer >= 0!`
                         : `n 必须是非负整数!`,
                     );
                   }
-                  if (error.message === `m must be an integer >= 0!`) {
+                  if (
+                    typeof error === "object" &&
+                    error !== null &&
+                    "message" in error &&
+                    (error as { message: string }).message === `m must be an integer >= 0!`
+                  ) {
                     setRandomizerError(
                       settings.language === "en"
                         ? `m must be an integer >= 0!`
                         : `m 必须是非负整数!`,
                     );
                   }
-                  if (error.message === `too many edges!`) {
+                  if (
+                    typeof error === "object" &&
+                    error !== null &&
+                    "message" in error &&
+                    (error as { message: string }).message === `too many edges!`
+                  ) {
                     setRandomizerError(
                       settings.language === "en"
                         ? `too many edges!`
                         : `边的数量过多!`,
                     );
                   }
-                  if (error.message === `insufficient edges!`) {
+                  if (
+                    typeof error === "object" &&
+                    error !== null &&
+                    "message" in error &&
+                    (error as { message: string }).message === `insufficient edges!`
+                  ) {
                     setRandomizerError(
                       settings.language === "en"
                         ? `insufficient edges!`
                         : `边的数量过少!`,
                     );
                   }
-                  if (error.message === `invalid node label range`) {
+                  if (
+                    typeof error === "object" &&
+                    error !== null &&
+                    "message" in error &&
+                    (error as { message: string }).message === `invalid node label range`
+                  ) {
                     setRandomizerError(
                       settings.language === "en"
                         ? `invalid node label range`
                         : `节点标签的范围不合法`,
                     );
                   }
-                  if (error.message === `invalid edge label range`) {
+                  if (
+                    typeof error === "object" &&
+                    error !== null &&
+                    "message" in error &&
+                    (error as { message: string }).message === `invalid edge label range`
+                  ) {
                     setRandomizerError(
                       settings.language === "en"
                         ? `invalid edge label range`

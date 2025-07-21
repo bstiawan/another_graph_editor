@@ -40,10 +40,12 @@ export function GeneralSettings({ directed, settings, setSettings }: Props) {
             [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:border-none
             [&::-moz-range-thumb]:rounded-full"
           onChange={(e) => {
+            const newLabelOffset = Number.parseInt(e.target.value);
             setSettings({
               ...settings,
-              labelOffset: Number.parseInt(e.target.value),
+              labelOffset: newLabelOffset,
             });
+            localStorage.setItem("labelOffset", newLabelOffset.toString());
           }}
         />
         <div className="flex justify-between w-5/6 self-center">
@@ -166,6 +168,16 @@ export function GeneralSettings({ directed, settings, setSettings }: Props) {
           rightLabel={settings.language == "en" ? "On" : "开启"}
           toggleId={"settingsLockMode"}
           settingsName={"lockMode"}
+          settings={settings}
+          setSettings={setSettings}
+        />
+
+        <SettingsToggleSection
+          title={settings.language == "en" ? "Collision Avoidance" : "碰撞避免"}
+          leftLabel={settings.language == "en" ? "Off" : "关闭"}
+          rightLabel={settings.language == "en" ? "On" : "开启"}
+          toggleId={"settingsCollisionAvoidance"}
+          settingsName={"collisionAvoidance"}
           settings={settings}
           setSettings={setSettings}
         />

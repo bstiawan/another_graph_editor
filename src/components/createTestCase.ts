@@ -2,13 +2,11 @@ import { TestCases } from "../types";
 import { getDefaultGraph } from "./utils";
 
 export interface EdgesParams {
-  nodeLabels: string;
   roots: string;
   edges: string;
 }
 
 export interface ParChildParams {
-  nodeLabels: string;
   roots: string;
   parent: string;
   child: string;
@@ -41,13 +39,11 @@ export function createTestCase(
   setCurrentId(newTabId);
 
   if (edges) {
-    construct("graphInputNodeLabelsEdges", edges.nodeLabels, newTabId);
     construct("graphInputRootsEdges", edges.roots, newTabId);
     construct("graphInputEdges", edges.edges, newTabId);
   }
 
   if (parChild) {
-    construct("graphInputNodeLabelsParChild", parChild.nodeLabels, newTabId);
     construct("graphInputRootsParChild", parChild.roots, newTabId);
     construct("graphInputParent", parChild.parent, newTabId);
     construct("graphInputChild", parChild.child, newTabId);
@@ -57,7 +53,7 @@ export function createTestCase(
 
 function construct(htmlId: string, value: string, newTabId: number) {
   setTimeout(() => {
-    let target = document.getElementById(
+    const target = document.getElementById(
       htmlId + newTabId,
     ) as HTMLTextAreaElement;
     if (target === null) return;

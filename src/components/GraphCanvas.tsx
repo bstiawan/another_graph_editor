@@ -484,8 +484,6 @@ export function GraphCanvas({
     }
 
     try {
-      console.log('Starting node name update:', { oldName, newName, currentId });
-      
       // Update all edges that contain the old node name
       const updatedEdges = currentTestCase?.graphEdges.edges.map(edge => {
         const parts = edge.split(" ");
@@ -497,8 +495,6 @@ export function GraphCanvas({
         }
         return parts.join(" ");
       }) || [];
-      
-      console.log('Updated edges:', updatedEdges);
 
       // Update nodes array
       const updatedNodes = currentTestCase?.graphEdges.nodes.map(node => node === oldName ? newName : node) || [];
@@ -526,10 +522,7 @@ export function GraphCanvas({
       });
       
       // Copy all existing edge labels first
-      console.log('Original edge labels:', currentTestCase?.graphEdges.edgeLabels);
-      console.log('Original edge labels entries:');
       currentTestCase?.graphEdges.edgeLabels.forEach((label, key) => {
-        console.log(`  "${key}" -> "${label}"`);
         newEdgeLabels.set(key, label);
       });
       
@@ -578,7 +571,6 @@ export function GraphCanvas({
           // Create new edge key with position
           const newEdgeKeyWithPosition = `${u} ${v} ${position}`;
           
-          console.log(`Updating edge label: ${foundOldKey} -> ${newEdgeKeyWithPosition} = ${foundLabel}`);
           newEdgeLabels.set(newEdgeKeyWithPosition, foundLabel);
           // Remove the old key
           if (foundOldKey) {
@@ -593,8 +585,6 @@ export function GraphCanvas({
         
         // Update the test case with the new graph
         updatedCurrentTestCase.graphEdges = updatedGraphEdges;
-        
-        console.log('Updated test case:', updatedCurrentTestCase);
       }
 
       // Update the input fields

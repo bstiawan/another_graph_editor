@@ -1,6 +1,6 @@
 import { TestCases } from "../types";
 import { Settings } from "../types";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useEffect } from "react";
 
 import { GraphPalette } from "./GraphPalette";
@@ -8,6 +8,7 @@ import { GraphPalette } from "./GraphPalette";
 import { updateDirected } from "./animateGraph";
 import { updateSettings } from "./animateGraph";
 import { animateGraph } from "./animateGraph";
+import { edgeLabelPositions } from "./animateGraph";
 
 import { resizeGraph } from "./animateGraph";
 import { updateGraph } from "./animateGraph";
@@ -21,6 +22,18 @@ interface Props {
   directed: boolean;
   settings: Settings;
   setSettings: React.Dispatch<React.SetStateAction<Settings>>;
+  setTestCases: React.Dispatch<React.SetStateAction<TestCases>>;
+  currentId: number;
+}
+
+// Interface for edge label editing
+interface EdgeLabelEdit {
+  edgeKey: string;
+  label: string;
+  x: number;
+  y: number;
+  node1: string;
+  node2: string;
 }
 
 function oversampleCanvas(
@@ -65,14 +78,19 @@ export function GraphCanvas({
   directed,
   settings,
   setSettings,
+  setTestCases,
+  currentId,
 }: Props) {
-  let refMain = useRef<HTMLCanvasElement>(null);
-  let refAnnotation = useRef<HTMLCanvasElement>(null);
-  let refIndicator = useRef<HTMLCanvasElement>(null);
+  const refMain = useRef<HTMLCanvasElement>(null);
+  const refAnnotation = useRef<HTMLCanvasElement>(null);
+  const refIndicator = useRef<HTMLCanvasElement>(null);
+
+  // State for inline edge label editing
+  const [editingEdgeLabel, setEditingEdgeLabel] = useState<EdgeLabelEdit | null>(null);
 
   const downloadImage = (): void => {
-    let canvasMain = refMain.current;
-    let canvasAnnotation = refAnnotation.current;
+    const canvasMain = refMain.current;
+    const canvasAnnotation = refAnnotation.current;
 
     if (canvasMain === null) {
       console.log("Error: `canvas(Main)` is null!");
@@ -83,8 +101,8 @@ export function GraphCanvas({
       return;
     }
 
-    let canvas = document.createElement("canvas");
-    let ctx = canvas.getContext("2d");
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
 
     if (ctx === null) {
       console.log("Error: `ctx` is null!");
@@ -97,7 +115,7 @@ export function GraphCanvas({
     ctx.drawImage(canvasMain, 0, 0);
     ctx.drawImage(canvasAnnotation, 0, 0);
 
-    let dataURL = canvas.toDataURL("image/png");
+    const dataURL = canvas.toDataURL("image/png");
 
     const a = document.createElement("a");
     a.href = dataURL;
@@ -110,7 +128,7 @@ export function GraphCanvas({
   };
 
   const downloadSVG = async (): Promise<void> => {
-    let canvasMain = refMain.current;
+    const canvasMain = refMain.current;
     if (!canvasMain) {
       console.log("Error: canvas is null!");
       return;
@@ -145,14 +163,14 @@ export function GraphCanvas({
   };
 
   const resizeCanvasMain = (): void => {
-    let canvas = refMain.current;
+    const canvas = refMain.current;
 
     if (canvas === null) {
       console.log("Error: `canvas` is null!");
       return;
     }
 
-    let ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d");
 
     if (ctx === null) {
       console.log("Error: `ctx` is null!");
@@ -177,14 +195,14 @@ export function GraphCanvas({
   };
 
   const resizeCanvasOverall = (): void => {
-    let canvas = refAnnotation.current;
+    const canvas = refAnnotation.current;
 
     if (canvas === null) {
       console.log("Error: `canvas` is null!");
       return;
     }
 
-    let ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d");
 
     if (ctx === null) {
       console.log("Error: `ctx` is null!");
@@ -209,14 +227,14 @@ export function GraphCanvas({
   };
 
   const resizeCanvasIndicator = (): void => {
-    let canvas = refIndicator.current;
+    const canvas = refIndicator.current;
 
     if (canvas === null) {
       console.log("Error: `canvas` is null!");
       return;
     }
 
-    let ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d");
 
     if (ctx === null) {
       console.log("Error: `ctx` is null!");
@@ -242,7 +260,7 @@ export function GraphCanvas({
   };
 
   useEffect(() => {
-    let font = new FontFace(
+    const font = new FontFace(
       "JB",
       "url(/another_graph_editor/JetBrainsMono-Bold.ttf)",
     );
@@ -250,9 +268,9 @@ export function GraphCanvas({
     font.load();
     document.fonts.add(font);
 
-    let canvasMain = refMain.current;
-    let canvasAnnotation = refAnnotation.current;
-    let canvasIndicator = refIndicator.current;
+    const canvasMain = refMain.current;
+    const canvasAnnotation = refAnnotation.current;
+    const canvasIndicator = refIndicator.current;
 
     if (
       canvasMain === null ||
@@ -263,12 +281,12 @@ export function GraphCanvas({
       return;
     }
 
-    let mainRenderer = new CanvasRenderer(canvasMain);
-    let indicatorRenderer = new CanvasRenderer(canvasIndicator);
+    const mainRenderer = new CanvasRenderer(canvasMain);
+    const indicatorRenderer = new CanvasRenderer(canvasIndicator);
 
-    let ctxMain = canvasMain.getContext("2d");
-    let ctxAnnotation = canvasAnnotation.getContext("2d");
-    let ctxIndicator = canvasIndicator.getContext("2d");
+    const ctxMain = canvasMain.getContext("2d");
+    const ctxAnnotation = canvasAnnotation.getContext("2d");
+    const ctxIndicator = canvasIndicator.getContext("2d");
 
     if (
       mainRenderer === null ||
@@ -318,6 +336,92 @@ export function GraphCanvas({
     resizeCanvasIndicator();
   }, [settings.expandedCanvas]);
 
+  // Function to handle canvas clicks for edge label editing
+  const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (settings.drawMode !== "node") return; // Only allow editing in node mode
+    
+    const canvas = event.currentTarget;
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    
+    // Check if click is on an edge label
+    for (const [edgeKey, position] of edgeLabelPositions) {
+      const labelWidth = 60; // Approximate width of edge label
+      const labelHeight = 20; // Approximate height of edge label
+      
+      if (
+        x >= position.x - labelWidth / 2 &&
+        x <= position.x + labelWidth / 2 &&
+        y >= position.y - labelHeight / 2 &&
+        y <= position.y + labelHeight / 2
+      ) {
+        // Find the current label text
+        const currentTestCase = testCases.get(currentId);
+        if (currentTestCase && currentTestCase.graphEdges.edgeLabels) {
+          const label = currentTestCase.graphEdges.edgeLabels.get(edgeKey) || "";
+          setEditingEdgeLabel({
+            edgeKey,
+            label,
+            x: position.x,
+            y: position.y,
+            node1: position.node1,
+            node2: position.node2,
+          });
+        }
+        break;
+      }
+    }
+  };
+
+  // Function to handle edge label edit completion
+  const handleEdgeLabelEdit = (newLabel: string) => {
+    if (!editingEdgeLabel) return;
+    
+    // Update the test cases with the new label
+    const updatedTestCases = new Map(testCases);
+    const currentTestCase = updatedTestCases.get(currentId);
+    if (currentTestCase && currentTestCase.graphEdges.edgeLabels) {
+      currentTestCase.graphEdges.edgeLabels.set(editingEdgeLabel.edgeKey, newLabel);
+      setTestCases(updatedTestCases);
+      
+      // Update the input fields to reflect the change
+      const edgeParts = editingEdgeLabel.edgeKey.split(" ");
+      const node1 = edgeParts[0];
+      const node2 = edgeParts[1];
+      
+      // Find the corresponding input row and update the Service field
+      const edgeInputsContainer = document.getElementById(`edgeInputs${currentId}`) as HTMLDivElement;
+      if (edgeInputsContainer) {
+        const rows = Array.from(edgeInputsContainer.children) as HTMLDivElement[];
+        for (const row of rows) {
+          const inputs = row.querySelectorAll("input");
+          const serverInput = inputs[0] as HTMLInputElement;
+          const clientInput = inputs[1] as HTMLInputElement;
+          
+          if (serverInput && clientInput && 
+              serverInput.value.trim() === node1 && 
+              clientInput.value.trim() === node2) {
+            const serviceInput = inputs[2] as HTMLInputElement;
+            if (serviceInput) {
+              serviceInput.value = newLabel;
+              // Trigger the input event to update the graph
+              serviceInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            break;
+          }
+        }
+      }
+    }
+    
+    setEditingEdgeLabel(null);
+  };
+
+  // Function to cancel edge label editing
+  const handleCancelEdit = () => {
+    setEditingEdgeLabel(null);
+  };
+
   return (
     <div className="flex h-screen">
       <div
@@ -362,10 +466,24 @@ export function GraphCanvas({
                 viewBox="0 0 24 24"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
-                className="stroke-text w-3/4 h-3/4 -rotate-45"
+                className="stroke-text"
               >
                 <path
-                  d="M11.0605 2.93203C11.3983 2.68689 11.5672 2.56432 11.7518 2.51696C11.9148 2.47514 12.0858 2.47514 12.2488 2.51696C12.4334 2.56432 12.6023 2.68689 12.9401 2.93203L21.0586 8.82396C21.397 9.06956 21.5663 9.19235 21.6686 9.3535C21.7589 9.49579 21.8119 9.65862 21.8224 9.82684C21.8344 10.0174 21.7697 10.2162 21.6404 10.6138L18.5401 20.1449C18.4109 20.5421 18.3463 20.7407 18.2247 20.8876C18.1173 21.0173 17.979 21.1178 17.8224 21.1798C17.6451 21.25 17.4362 21.25 17.0186 21.25H6.98203C6.56437 21.25 6.35554 21.25 6.17822 21.1798C6.02164 21.1178 5.88325 21.0173 5.77589 20.8876C5.65429 20.7407 5.58969 20.5421 5.4605 20.1449L2.36021 10.6138C2.23086 10.2162 2.16619 10.0174 2.17817 9.82684C2.18874 9.65862 2.24166 9.49579 2.33202 9.3535C2.43434 9.19235 2.60355 9.06956 2.94196 8.82396L11.0605 2.93203Z"
+                  d="M9 9L15 15"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M15 9L9 15"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="9"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -458,14 +576,14 @@ export function GraphCanvas({
                   : "清除所有笔迹"
               }
               onClick={() => {
-                let canvas = refAnnotation.current;
+                const canvas = refAnnotation.current;
 
                 if (canvas === null) {
                   console.log("Error: `canvas` is null!");
                   return;
                 }
 
-                let ctx = canvas.getContext("2d");
+                const ctx = canvas.getContext("2d");
 
                 if (ctx === null) {
                   console.log("Error: `ctx` is null!");
@@ -566,6 +684,7 @@ export function GraphCanvas({
             className="active:cursor-pointer border-2 border-border
               hover:border-border-hover rounded-lg bg-block shadow shadow-shadow
               touch-none top-0 bottom-0 left-0 right-0 w-full h-full absolute"
+            onClick={handleCanvasClick}
           ></canvas>
           <canvas
             ref={refAnnotation}
@@ -591,6 +710,37 @@ export function GraphCanvas({
               rounded-lg shadow shadow-shadow touch-none top-0 bottom-0 left-0
               right-0 w-full h-full absolute pointer-events-none"
           ></canvas>
+          
+          {/* Inline editing overlay for edge labels */}
+          {editingEdgeLabel && (
+            <div
+              className="absolute z-10 bg-block border-2 border-border rounded-lg shadow-lg p-2"
+              style={{
+                left: `${editingEdgeLabel.x}px`,
+                top: `${editingEdgeLabel.y - 30}px`,
+                transform: 'translateX(-50%)',
+              }}
+            >
+              <input
+                type="text"
+                value={editingEdgeLabel.label}
+                onChange={(e) => setEditingEdgeLabel({
+                  ...editingEdgeLabel,
+                  label: e.target.value
+                })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleEdgeLabelEdit(editingEdgeLabel.label);
+                  } else if (e.key === 'Escape') {
+                    handleCancelEdit();
+                  }
+                }}
+                onBlur={() => handleEdgeLabelEdit(editingEdgeLabel.label)}
+                className="bg-block text-text border border-border rounded px-2 py-1 text-sm font-jetbrains w-24"
+                autoFocus
+              />
+            </div>
+          )}
         </div>
         <div className="flex justify-end">
           <div

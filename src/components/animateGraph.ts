@@ -35,6 +35,9 @@ interface Vector2D {
   y: number;
 }
 
+// Global variable to store edge label positions
+export const edgeLabelPositions = new Map<string, { x: number; y: number; node1: string; node2: string }>();
+
 export class Node {
   pos: Vector2D;
   vel: Vector2D = { x: 0, y: 0 };
@@ -826,6 +829,9 @@ function renderNodes(renderer: GraphRenderer) {
 }
 
 function renderEdges(renderer: GraphRenderer) {
+  // Clear previous edge label positions
+  edgeLabelPositions.clear();
+  
   let renderedEdges = [...edges];
 
   if (!settings.multiedgeMode) {
@@ -917,6 +923,7 @@ function renderEdges(renderer: GraphRenderer) {
           settings,
           nodeBorderWidthHalf,
           edgeLabelColor,
+          e,
         );
       } else {
         if (e < eRev) {
@@ -930,6 +937,7 @@ function renderEdges(renderer: GraphRenderer) {
             settings,
             nodeBorderWidthHalf,
             edgeLabelColor,
+            e,
           );
         } else {
           drawEdgeLabel(
@@ -942,6 +950,7 @@ function renderEdges(renderer: GraphRenderer) {
             settings,
             nodeBorderWidthHalf,
             edgeLabelColor,
+            e,
           );
         }
       }

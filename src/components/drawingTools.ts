@@ -1,5 +1,8 @@
 import { Settings } from "../types";
 
+// Import the edge label positions map
+import { edgeLabelPositions } from "./animateGraph";
+
 export interface GraphRenderer {
   // 基础绘制属性
   lineWidth: number;
@@ -459,6 +462,7 @@ export function drawEdgeLabel(
   settings: Settings,
   nodeBorderWidthHalf: number,
   edgeLabelColor: string,
+  edgeKey?: string,
 ) {
   let px = u.y - v.y;
   let py = v.x - u.x;
@@ -488,7 +492,20 @@ export function drawEdgeLabel(
   ctx.font = `${settings.fontSize}px JB`;
   ctx.fillStyle = edgeLabelColor;
 
-  ctx.fillText(label, mx + px, my + py);
+  const labelX = mx + px;
+  const labelY = my + py;
+
+  ctx.fillText(label, labelX, labelY);
+
+  // Store the edge label position for click detection
+  if (edgeKey) {
+    edgeLabelPositions.set(edgeKey, {
+      x: labelX,
+      y: labelY,
+      node1: `${u.x},${u.y}`,
+      node2: `${v.x},${v.y}`,
+    });
+  }
 }
 
 export function drawCircle(
@@ -610,7 +627,7 @@ export function drawOctagon(
 ) {
   const length = 14 + (3 * (nodeRadius - 16)) / 2;
 
-  let x = u.x;
+  const x = u.x;
   let y = u.y;
 
   if (u.y - nodeRadius - 2 * length <= 5) {

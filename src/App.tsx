@@ -31,7 +31,7 @@ function App() {
   const [directed, setDirected] = useState<boolean>(
     localStorage.getItem("directed") !== null
       ? localStorage.getItem("directed") === "true"
-      : false
+      : true
   );
 
   const [tabs, setTabs] = useState<number[]>([0]);
@@ -81,7 +81,7 @@ function App() {
     edgeLength:
       localStorage.getItem("edgeLength") !== null
         ? Number.parseFloat(localStorage.getItem("edgeLength")!)
-        : 10,
+        : 100,
     edgeLabelSeparation:
       localStorage.getItem("edgeLabelSeparation") !== null
         ? Number.parseFloat(localStorage.getItem("edgeLabelSeparation")!)
@@ -105,7 +105,7 @@ function App() {
     showComponents:
       localStorage.getItem("showComponents") !== null
         ? localStorage.getItem("showComponents") === "true"
-        : false,
+        : true,
     showBridges:
       localStorage.getItem("showBridges") !== null
         ? localStorage.getItem("showBridges") === "true"
@@ -129,11 +129,11 @@ function App() {
     markedNodes:
       localStorage.getItem("markedNodes") !== null
         ? localStorage.getItem("markedNodes") == "true"
-        : false,
+        : true,
     fixedMode:
       localStorage.getItem("fixedMode") !== null
         ? localStorage.getItem("fixedMode") === "true"
-        : false,
+        : true,
     multiedgeMode:
       localStorage.getItem("multiedgeMode") !== null
         ? localStorage.getItem("multiedgeMode") === "true"
@@ -153,11 +153,11 @@ function App() {
     collisionStrength:
       localStorage.getItem("collisionStrength") !== null
         ? Number.parseFloat(localStorage.getItem("collisionStrength")!)
-        : 1.0,
+        : 0.2,
     minNodeDistance:
       localStorage.getItem("minNodeDistance") !== null
         ? Number.parseFloat(localStorage.getItem("minNodeDistance")!)
-        : 2.2,
+        : 1,
   });
 
   const [init, setInit] = useState<boolean>(false);
@@ -750,6 +750,8 @@ function App() {
             directed={directed}
             settings={settings}
             setSettings={setSettings}
+            setTestCases={setTestCases}
+            currentId={currentId}
           />
         </div>
 

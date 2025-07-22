@@ -54,14 +54,18 @@ export class Node {
   inBounds(): boolean {
     const x = this.pos.x;
     const y = this.pos.y;
-    const xOk = x >= nodeRadius && x + nodeRadius <= canvasWidth;
-    const yOk = y >= nodeRadius && y + nodeRadius <= canvasHeight;
+    // Use a reasonable default radius for bounds checking
+    const defaultRadius = 16;
+    const xOk = x >= defaultRadius && x + defaultRadius <= canvasWidth;
+    const yOk = y >= defaultRadius && y + defaultRadius <= canvasHeight;
     return xOk && yOk;
   }
   resetPos(): void {
+    // Use a reasonable default radius for position resetting
+    const defaultRadius = 16;
     this.pos = {
-      x: clamp(this.pos.x, nodeRadius, canvasWidth - nodeRadius),
-      y: clamp(this.pos.y, nodeRadius, canvasHeight - nodeRadius),
+      x: clamp(this.pos.x, defaultRadius, canvasWidth - defaultRadius),
+      y: clamp(this.pos.y, defaultRadius, canvasHeight - defaultRadius),
     };
   }
   // Apply smooth displacement for fluid-like collision avoidance
@@ -90,7 +94,10 @@ function generateRandomCoords(): Vector2D {
   let xFailCnt = 0;
   let yFailCnt = 0;
 
-  while (x <= nodeRadius || x >= canvasWidth - nodeRadius) {
+  // Use a reasonable default radius for coordinate generation
+  const defaultRadius = 16;
+
+  while (x <= defaultRadius || x >= canvasWidth - defaultRadius) {
     x = (Math.random() * canvasWidth) / 2 + canvasWidth / 4;
     xFailCnt++;
     if (xFailCnt === 10) {
@@ -98,7 +105,7 @@ function generateRandomCoords(): Vector2D {
     }
   }
 
-  while (y <= nodeRadius || y >= canvasHeight - nodeRadius) {
+  while (y <= defaultRadius || y >= canvasHeight - defaultRadius) {
     y = (Math.random() * canvasHeight) / 2 + canvasHeight / 4;
     yFailCnt++;
     if (yFailCnt === 10) {
@@ -176,6 +183,9 @@ let prevMS = performance.now();
 let nodeRadius = 16;
 let nodeBorderWidthHalf = 1;
 
+// Add a map to store individual node radii
+const nodeRadiusMap = new Map<string, number>();
+
 let nodeLabelColor = NODE_LABEL_LIGHT;
 let nodeLabelOutlineColor = NODE_LABEL_OUTLINE_LIGHT;
 
@@ -241,9 +251,9 @@ let settings: Settings = {
 let lastDeletedNodePos: Vector2D = { x: -1, y: -1 };
 
 let nodes: string[] = [];
-let nodesToConceal = new Set<string>();
-let nodeMap = new Map<string, Node>();
-let testCaseMap = new Map<number, number>();
+const nodesToConceal = new Set<string>();
+const nodeMap = new Map<string, Node>();
+const testCaseMap = new Map<number, number>();
 
 let nodeDist: number = 40;
 
@@ -254,7 +264,7 @@ let labelOffset = 0;
 let draggedNodes: string[] = [];
 
 let edges: string[] = [];
-let edgeToPos = new Map<string, number>();
+const edgeToPos = new Map<string, number>();
 let edgeLabels = new Map<string, string>();
 
 let adj = new Map<string, string[]>();
@@ -277,7 +287,7 @@ let positionMap: PositionMap | undefined = undefined;
 let testCaseBoundingBoxes: Map<number, Bounds> | undefined = undefined;
 
 function updateNodes(graphNodes: string[]): void {
-  let deletedNodes: string[] = [];
+  const deletedNodes: string[] = [];
 
   for (const u of nodes) {
     if (!graphNodes.includes(u)) {
@@ -333,7 +343,8 @@ function calculateSmoothCollisionDisplacement(nodeId: string): void {
   }
   
   const node = nodeMap.get(nodeId)!;
-  const minDistance = nodeRadius * settings.minNodeDistance;
+  const individualNodeRadius = nodeRadiusMap.get(nodeId) || nodeRadius;
+  const minDistance = individualNodeRadius * settings.minNodeDistance;
   const collisionStrength = settings.collisionStrength * 2; // Much lower strength for smooth movement
   
   for (const otherId of nodes) {
@@ -618,13 +629,13 @@ export function updateGraph(testCases: TestCases) {
   let rawNodes: string[] = [];
   let rawEdges: string[] = [];
 
-  let rawAdj = new Map<string, string[]>();
-  let rawRev = new Map<string, string[]>();
+  const rawAdj = new Map<string, string[]>();
+  const rawRev = new Map<string, string[]>();
 
-  let rawEdgeLabels = new Map<string, string>();
-  let rawNodeLabels = new Map<string, string>();
+  const rawEdgeLabels = new Map<string, string>();
+  const rawNodeLabels = new Map<string, string>();
 
-  testCases.forEach((testCase, _) => {
+      testCases.forEach((testCase) => {
     if (testCase.inputFormat === "edges") {
       testCase.graphParChild.nodes.map((u) => nodesToConceal.add(u));
     } else {
@@ -707,8 +718,7 @@ export function updateGraph(testCases: TestCases) {
   nodeLabels = new Map<string, string>(rawNodeLabels);
   edgeLabels = new Map<string, string>(rawEdgeLabels);
 
-  let isBipartite: boolean;
-  [isBipartite] = buildBipartite(nodes, adj);
+  const isBipartite: boolean = buildBipartite(nodes, adj)[0];
   localStorage.setItem("isBipartite", isBipartite.toString());
 
   let curIdx = 0;
@@ -719,6 +729,9 @@ export function updateGraph(testCases: TestCases) {
   });
 
   buildSettings();
+  
+  // Update node radii after building settings and adjacency sets
+  updateNodeRadii();
 }
 
 export function resizeGraph(width: number, height: number) {
@@ -733,6 +746,7 @@ export function updateDirected(d: boolean) {
 export function updateSettings(s: Settings) {
   settings = s;
   buildSettings();
+  updateNodeRadii();
 }
 
 function resetMisplacedNodes() {
@@ -774,13 +788,15 @@ function renderNodes(renderer: GraphRenderer) {
       renderer.fillStyle = color;
     }
 
+    const individualNodeRadius = nodeRadiusMap.get(u) || nodeRadius;
+    
     if (settings.showBridges && cutMap !== undefined && cutMap.get(u)) {
       drawHexagon(
         renderer,
         node.pos,
         node.selected,
         nodeBorderWidthHalf,
-        nodeRadius,
+        individualNodeRadius,
         isTransparent,
       );
     } else {
@@ -789,7 +805,7 @@ function renderNodes(renderer: GraphRenderer) {
         node.pos,
         node.selected,
         nodeBorderWidthHalf,
-        nodeRadius,
+        individualNodeRadius,
         isTransparent,
       );
     }
@@ -806,6 +822,19 @@ function renderNodes(renderer: GraphRenderer) {
       node!.pos.x,
       node!.pos.y + TEXT_Y_OFFSET,
     );
+    
+    // Debug: Show radius information (can be removed in production)
+    if (process.env.NODE_ENV === 'development') {
+      const radius = nodeRadiusMap.get(u) || nodeRadius;
+      const edgeCount = fullAdjSet.get(u)?.size || 0;
+      renderer.font = `${Math.max(8, settings.fontSize - 4)}px JB`;
+      renderer.fillStyle = settings.darkMode ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)';
+      renderer.fillText(
+        `${edgeCount}e/${radius.toFixed(1)}px`,
+        node!.pos.x,
+        node!.pos.y + individualNodeRadius + 15,
+      );
+    }
   }
   for (let i = 0; i < nodes.length; i++) {
     const u = nodes[i];
@@ -814,13 +843,14 @@ function renderNodes(renderer: GraphRenderer) {
     const node = nodeMap.get(u)!;
 
     if (nodeLabels.has(nodes[i])) {
+      const individualNodeRadius = nodeRadiusMap.get(u) || nodeRadius;
       drawOctagon(
         renderer,
         node.pos,
         nodeLabels.get(nodes[i])!,
         settings,
         nodeBorderWidthHalf,
-        nodeRadius,
+        individualNodeRadius,
         nodeLabelColor,
         nodeLabelOutlineColor,
       );
@@ -1222,7 +1252,8 @@ export function animateGraph(
     };
 
     nodes.map((u) => {
-      if (euclidDist(nodeMap.get(u)!.pos, mousePos) <= nodeRadius) {
+      const individualNodeRadius = nodeRadiusMap.get(u) || nodeRadius;
+      if (euclidDist(nodeMap.get(u)!.pos, mousePos) <= individualNodeRadius) {
         draggedNodes.push(u);
       }
     });
@@ -1244,7 +1275,8 @@ export function animateGraph(
     if (draggedNodes.length === 0) {
       let hasNode = false;
       nodes.map((u) => {
-        if (euclidDist(nodeMap.get(u)!.pos, mousePos) <= nodeRadius) {
+        const individualNodeRadius = nodeRadiusMap.get(u) || nodeRadius;
+        if (euclidDist(nodeMap.get(u)!.pos, mousePos) <= individualNodeRadius) {
           hasNode = true;
         }
       });
@@ -1315,4 +1347,27 @@ export function animateGraph(
     }, 1000 / FPS);
   };
   animate();
+}
+
+// Function to calculate dynamic node radius based on edge count
+function calculateNodeRadius(nodeId: string): number {
+  const baseRadius = settings.nodeRadius;
+  const edgeCount = fullAdjSet.get(nodeId)?.size || 0;
+  
+  // 10% increment per edge, with a minimum of 1 edge
+  const edgeMultiplier = 1 + (edgeCount * 0.1);
+  const calculatedRadius = baseRadius * edgeMultiplier;
+  
+  // Debug logging (can be removed in production)
+  console.log(`Node ${nodeId}: ${edgeCount} edges, radius ${calculatedRadius.toFixed(1)}px (base: ${baseRadius}px, multiplier: ${edgeMultiplier.toFixed(2)})`);
+  
+  return calculatedRadius;
+}
+
+// Function to update all node radii
+function updateNodeRadii(): void {
+  nodeRadiusMap.clear();
+  for (const nodeId of nodes) {
+    nodeRadiusMap.set(nodeId, calculateNodeRadius(nodeId));
+  }
 }

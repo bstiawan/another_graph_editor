@@ -1,14 +1,8 @@
-import { parseGraphInputEdges } from "./parseGraphInput";
-import { parseGraphInputParentChild } from "./parseGraphInput";
-import { useState, useEffect } from "react";
-
-import { Settings } from "../types";
+import { Settings, TestCases } from "../types";
 import { ParsedGraph } from "../types";
-import { TestCases } from "../types";
-import { Randomizer } from "../types";
-import { isInteger, randInt } from "./utils";
+import { parseGraphInputEdges, parseGraphInputParentChild } from "./parseGraphInput";
 
-import { generateRandomGraph } from "./generator";
+import { useState, useEffect } from "react";
 
 interface Props {
   settings: Settings;
@@ -19,8 +13,7 @@ interface Props {
   currentId: number;
   directed: boolean;
   setDirected: React.Dispatch<React.SetStateAction<boolean>>;
-  setRandomizer: React.Dispatch<React.SetStateAction<boolean>>;
-  randomizerConfig: Randomizer;
+  setImportExport: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export function GraphInput({
@@ -31,13 +24,9 @@ export function GraphInput({
   currentId,
   directed,
   setDirected,
-  setRandomizer,
-  randomizerConfig,
+  setImportExport,
 }: Props) {
   const [inputStatus, setInputStatus] = useState<boolean>(true);
-  const [randomizerError, setRandomizerError] = useState<string | undefined>(
-    undefined,
-  );
 
   const processGraphInput = () => {
     if (testCases.get(inputId) === undefined) return;
@@ -186,19 +175,19 @@ export function GraphInput({
     const node1Input = document.createElement("input");
     node1Input.type = "text";
     node1Input.className = "bg-ovr font-semibold font-jetbrains resize-none border-2 rounded-md px-2 py-1 border-single focus:outline-none text-lg border-border focus:border-border-active w-24";
-    node1Input.placeholder = "Node 1";
+    node1Input.placeholder = "Server";
     node1Input.addEventListener("input", () => processGraphInput());
 
     const node2Input = document.createElement("input");
     node2Input.type = "text";
     node2Input.className = "bg-ovr font-semibold font-jetbrains resize-none border-2 rounded-md px-2 py-1 border-single focus:outline-none text-lg border-border focus:border-border-active w-24";
-    node2Input.placeholder = "Node 2";
+    node2Input.placeholder = "Client";
     node2Input.addEventListener("input", () => processGraphInput());
 
     const edgeLabelInput = document.createElement("input");
     edgeLabelInput.type = "text";
     edgeLabelInput.className = "bg-ovr font-semibold font-jetbrains resize-none border-2 rounded-md px-2 py-1 border-single focus:outline-none text-lg border-border focus:border-border-active w-24";
-    edgeLabelInput.placeholder = "Label (opt)";
+    edgeLabelInput.placeholder = "Service";
     edgeLabelInput.addEventListener("input", () => processGraphInput());
 
     const removeButton = document.createElement("button");
@@ -533,178 +522,46 @@ export function GraphInput({
           >
             <button
               className="hover:opacity-50 active:text-randomize"
-              onClick={() => {
-                const inputFormat = testCases.get(inputId)!.inputFormat;
-                try {
-                  const graphEdges = generateRandomGraph(randomizerConfig);
-                  let edgeL = 0;
-                  let edgeR = 0;
-                  if (randomizerConfig.hasEdgeLabel) {
-                    if (
-                      !isInteger(randomizerConfig.edgeLabelMin) ||
-                      !isInteger(randomizerConfig.edgeLabelMax)
-                    ) {
-                      throw Error("invalid edge label range");
-                    }
-                    edgeL = parseInt(randomizerConfig.edgeLabelMin);
-                    edgeR = parseInt(randomizerConfig.edgeLabelMax);
-                    if (edgeR < edgeL) {
-                      throw Error("invalid edge label range");
-                    }
-                  }
-                  const left = new Set<number>();
-                  for (
-                    let u = 0;
-                    u < parseInt(randomizerConfig.nodeCount);
-                    u++
-                  ) {
-                    left.add(u + randomizerConfig.indexing);
-                  }
-                  for (const e of graphEdges) {
-                    left.delete(e[0]);
-                    left.delete(e[1]);
-                  }
-                  if (inputFormat === "edges") {
-                    const edges = document.getElementById(
-                      "graphInputEdges" + inputId,
-                    ) as HTMLTextAreaElement;
-                    let ans = "";
-                    for (const u of left) ans += u + "\n";
-                    for (let i = 0; i < graphEdges.length; i++) {
-                      ans += graphEdges[i].join(" ");
-                      if (randomizerConfig.hasEdgeLabel) {
-                        ans += " " + randInt(edgeL, edgeR);
-                      }
-                      if (i != graphEdges.length - 1) ans += "\n";
-                    }
-                    edges.value = ans;
-                  } else {
-                    const ps = document.getElementById(
-                      "graphInputParent" + inputId,
-                    ) as HTMLTextAreaElement;
-                    const cs = document.getElementById(
-                      "graphInputChild" + inputId,
-                    ) as HTMLTextAreaElement;
-                    let pAns = "";
-                    let cAns = "";
-                    let eAns = "";
-                    for (let i = 0; i < graphEdges.length; i++) {
-                      pAns += graphEdges[i][0];
-                      cAns += graphEdges[i][1];
-                      if (randomizerConfig.hasEdgeLabel) {
-                        eAns += randInt(edgeL, edgeR);
-                      }
-                      if (i != graphEdges.length - 1) {
-                        pAns += " ";
-                        cAns += " ";
-                        if (randomizerConfig.hasEdgeLabel) {
-                          eAns += " ";
-                        }
-                      }
-                    }
-                    for (const u of left) {
-                      pAns += " " + u;
-                      cAns += " " + u;
-                    }
-                    ps.value = pAns;
-                    cs.value = cAns;
-                    (
-                      document.getElementById(
-                        "graphInputEdgeLabels" + inputId,
-                      ) as HTMLTextAreaElement
-                    ).value = eAns;
-                  }
-                  setRandomizerError(undefined);
-                  processGraphInput();
-                } catch (error: unknown) {
-                  console.log(error);
-                  if (error instanceof Error) {
-                    if (error.message === `n must be an integer >= 0!`) {
-                      setRandomizerError(
-                        settings.language === "en"
-                          ? `n must be an integer >= 0!`
-                          : `n 必须是非负整数!`,
-                      );
-                    }
-                    if (error.message === `m must be an integer >= 0!`) {
-                      setRandomizerError(
-                        settings.language === "en"
-                          ? `m must be an integer >= 0!`
-                          : `m 必须是非负整数!`,
-                      );
-                    }
-                    if (error.message === `too many edges!`) {
-                      setRandomizerError(
-                        settings.language === "en"
-                          ? `too many edges!`
-                          : `边的数量过多!`,
-                      );
-                    }
-                    if (error.message === `insufficient edges!`) {
-                      setRandomizerError(
-                        settings.language === "en"
-                          ? `insufficient edges!`
-                          : `边的数量过少!`,
-                      );
-                    }
-                    if (error.message === `invalid node label range`) {
-                      setRandomizerError(
-                        settings.language === "en"
-                          ? `invalid node label range`
-                          : `节点标签的范围不合法`,
-                      );
-                    }
-                    if (error.message === `invalid edge label range`) {
-                      setRandomizerError(
-                        settings.language === "en"
-                          ? `invalid edge label range`
-                          : `边的标签的范围不合法`,
-                      );
-                    }
-                  }
-                }
-              }}
+              onClick={() => setImportExport(true)}
+              title={settings.language == "en" ? "Import/Export" : "导入/导出"}
             >
-              {settings.language == "en" ? "Random" : "随机"}
+              <svg
+                width="800px"
+                height="800px"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                className="stroke-text w-4 h-4"
+              >
+                <path
+                  d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M7 10L12 15L17 10"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M12 15V3"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </button>
-            <svg
-              width="22px"
-              height="22px"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className="hover:cursor-pointer stroke-text hover:opacity-50
-                active:stroke-randomize"
-              onClick={() => setRandomizer(true)}
-            >
-              <path
-                fillRule="evenodd"
-                clipRule="evenodd"
-                d="M11.7 14C10.623 14 9.74999 13.1046 9.74999 12C9.74999 10.8954 10.623 10 11.7 10C12.7769 10 13.65 10.8954 13.65 12C13.65 12.5304 13.4445 13.0391 13.0789 13.4142C12.7132 13.7893 12.2172 14 11.7 14Z"
-                stroke=""
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                fillRule="evenodd"
-                clipRule="evenodd"
-                d="M16.8841 16.063V14.721C16.8841 14.3887 17.0128 14.07 17.2419 13.835L18.1672 12.886C18.6443 12.3967 18.6443 11.6033 18.1672 11.114L17.2419 10.165C17.0128 9.93001 16.8841 9.61131 16.8841 9.27899V7.93599C16.8841 7.24398 16.3371 6.68299 15.6624 6.68299H14.353C14.029 6.68299 13.7182 6.55097 13.4891 6.31599L12.5638 5.36699C12.0867 4.87767 11.3132 4.87767 10.8361 5.36699L9.91087 6.31599C9.68176 6.55097 9.37102 6.68299 9.04702 6.68299H7.73759C7.41341 6.68299 7.10253 6.81514 6.87339 7.05034C6.64425 7.28554 6.51566 7.6045 6.51592 7.93699V9.27899C6.51591 9.61131 6.3872 9.93001 6.15809 10.165L5.23282 11.114C4.75573 11.6033 4.75573 12.3967 5.23282 12.886L6.15809 13.835C6.3872 14.07 6.51591 14.3887 6.51592 14.721V16.063C6.51592 16.755 7.06288 17.316 7.73759 17.316H9.04702C9.37102 17.316 9.68176 17.448 9.91087 17.683L10.8361 18.632C11.3132 19.1213 12.0867 19.1213 12.5638 18.632L13.4891 17.683C13.7182 17.448 14.029 17.316 14.353 17.316H15.6614C15.9856 17.3163 16.2966 17.1844 16.5259 16.9493C16.7552 16.7143 16.8841 16.3955 16.8841 16.063Z"
-                stroke=""
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
           </div>
         </div>
-        {randomizerError ? (
+        {/* randomizerError ? (
           <footer className="text-format-bad-border">
             ERROR: {randomizerError}
           </footer>
         ) : (
           <></>
-        )}
+        ) */}
       </li>
     </>
   );

@@ -4,14 +4,14 @@ import { GraphCanvas } from "./components/GraphCanvas";
 import { GraphSettings } from "./components/GraphSettings";
 
 import { InitScreen } from "./components/InitScreen";
-import { RandomizerScreen } from "./components/RandomizerScreen";
+import { ImportExportScreen } from "./components/ImportExportScreen";
 
 import { Settings } from "./types";
 import { SettingsFormat } from "./types";
 import { TestCase, TestCases } from "./types";
-import { Randomizer } from "./types";
 
 import { getDefaultGraph } from "./components/utils";
+import { parseGraphInputEdges } from "./components/parseGraphInput";
 
 import { useState } from "react";
 
@@ -161,54 +161,291 @@ function App() {
   });
 
   const [init, setInit] = useState<boolean>(false);
-  const [randomizer, setRandomizer] = useState<boolean>(false);
+  const [importExport, setImportExport] = useState<boolean>(false);
 
-  const [randomizerConfig, setRandomizerConfig] = useState<Randomizer>({
-    indexing:
-      localStorage.getItem("randomizerIndexing") !== null
-        ? parseInt(localStorage.getItem("randomizerIndexing")!)
-        : 0,
-    nodeCount:
-      localStorage.getItem("randomizerNodeCount") !== null
-        ? localStorage.getItem("randomizerNodeCount")!
-        : "",
-    edgeCount:
-      localStorage.getItem("randomizerEdgeCount") !== null
-        ? localStorage.getItem("randomizerEdgeCount")!
-        : "",
-    connected:
-      localStorage.getItem("randomizerConnected") !== null
-        ? localStorage.getItem("randomizerConnected")! == "true"
-        : false,
-    tree:
-      localStorage.getItem("randomizerTree") !== null
-        ? localStorage.getItem("randomizerTree")! == "true"
-        : false,
-    hasNodeLabel:
-      localStorage.getItem("randomizerHasNodeLabel") !== null
-        ? localStorage.getItem("randomizerHasNodeLabel")! == "true"
-        : false,
-    nodeLabelMin:
-      localStorage.getItem("randomizerNodeLabelMin") !== null
-        ? localStorage.getItem("randomizerNodeLabelMin")!
-        : "",
-    nodeLabelMax:
-      localStorage.getItem("randomizerNodeLabelMax") !== null
-        ? localStorage.getItem("randomizerNodeLabelMax")!
-        : "",
-    hasEdgeLabel:
-      localStorage.getItem("randomizerHasEdgeLabel") !== null
-        ? localStorage.getItem("randomizerHasEdgeLabel")! == "true"
-        : false,
-    edgeLabelMin:
-      localStorage.getItem("randomizerEdgeLabelMin") !== null
-        ? localStorage.getItem("randomizerEdgeLabelMin")!
-        : "",
-    edgeLabelMax:
-      localStorage.getItem("randomizerEdgeLabelMax") !== null
-        ? localStorage.getItem("randomizerEdgeLabelMax")!
-        : "",
-  });
+  // Function to get current graph data as multiline text
+  const getCurrentGraphData = (): string => {
+    const currentTestCase = testCases.get(currentId);
+    if (!currentTestCase) return "";
+    
+    if (currentTestCase.inputFormat === "edges") {
+      // Read directly from structured input fields
+      const edgeInputsContainer = document.getElementById(`edgeInputs${currentId}`);
+      if (edgeInputsContainer) {
+        const edgeRows = edgeInputsContainer.querySelectorAll("div");
+        const edgeData: string[] = [];
+        
+        edgeRows.forEach((row) => {
+          const inputs = row.querySelectorAll("input");
+          if (inputs.length >= 2) {
+            const node1 = (inputs[0] as HTMLInputElement).value.trim();
+            const node2 = (inputs[1] as HTMLInputElement).value.trim();
+            const edgeLabel = inputs.length >= 3 ? (inputs[2] as HTMLInputElement).value.trim() : "";
+            
+            if (node1 && node2) {
+              if (edgeLabel) {
+                edgeData.push(`${node1} ${node2} ${edgeLabel}`);
+              } else {
+                edgeData.push(`${node1} ${node2}`);
+              }
+            }
+          }
+        });
+        
+        return edgeData.join("\n");
+      }
+      
+      // Fallback to hidden textarea if structured inputs not found
+      const textarea = document.getElementById(`graphInputEdges${currentId}`) as HTMLTextAreaElement;
+      return textarea ? textarea.value : "";
+    } else {
+      // For parent-child format, combine parent and child arrays
+      const parentTextarea = document.getElementById(`graphInputParent${currentId}`) as HTMLTextAreaElement;
+      const childTextarea = document.getElementById(`graphInputChild${currentId}`) as HTMLTextAreaElement;
+      const labelsTextarea = document.getElementById(`graphInputEdgeLabels${currentId}`) as HTMLTextAreaElement;
+      
+      const parent = parentTextarea ? parentTextarea.value : "";
+      const child = childTextarea ? childTextarea.value : "";
+      const labels = labelsTextarea ? labelsTextarea.value : "";
+      
+      // Convert to edge format
+      const parentArray = parent.trim().split(/\s+/);
+      const childArray = child.trim().split(/\s+/);
+      const labelsArray = labels.trim().split(/\s+/);
+      
+      let result = "";
+      for (let i = 0; i < Math.min(parentArray.length, childArray.length); i++) {
+        if (parentArray[i] && childArray[i]) {
+          result += `${parentArray[i]} ${childArray[i]}`;
+          if (labelsArray[i]) {
+            result += ` ${labelsArray[i]}`;
+          }
+          result += "\n";
+        }
+      }
+      return result.trim();
+    }
+  };
+
+  // Function to handle importing data
+  const handleImportData = (data: string): void => {
+    const currentTestCase = testCases.get(currentId);
+    if (!currentTestCase) return;
+    
+    if (currentTestCase.inputFormat === "edges") {
+      // Update the hidden textarea
+      const textarea = document.getElementById(`graphInputEdges${currentId}`) as HTMLTextAreaElement;
+      if (textarea) {
+        textarea.value = data;
+        
+        // Rebuild the structured input fields from the imported data
+        const edgeInputsContainer = document.getElementById(`edgeInputs${currentId}`) as HTMLDivElement;
+        if (edgeInputsContainer) {
+          // Clear existing structured inputs
+          edgeInputsContainer.innerHTML = "";
+          
+          // Parse the imported data and create structured inputs
+          const lines = data.trim().split('\n');
+          lines.forEach(line => {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length >= 2) {
+              // Create a new row for each edge
+              const newRow = document.createElement("div");
+              newRow.className = "flex justify-between items-center space-x-2";
+
+              const node1Input = document.createElement("input");
+              node1Input.type = "text";
+              node1Input.className = "bg-ovr font-semibold font-jetbrains resize-none border-2 rounded-md px-2 py-1 border-single focus:outline-none text-lg border-border focus:border-border-active w-24";
+              node1Input.placeholder = "Server";
+              node1Input.value = parts[0];
+              node1Input.addEventListener("input", () => {
+                updateTestCasesFromStructuredInputs(currentId);
+              });
+
+              const node2Input = document.createElement("input");
+              node2Input.type = "text";
+              node2Input.className = "bg-ovr font-semibold font-jetbrains resize-none border-2 rounded-md px-2 py-1 border-single focus:outline-none text-lg border-border focus:border-border-active w-24";
+              node2Input.placeholder = "Client";
+              node2Input.value = parts[1];
+              node2Input.addEventListener("input", () => {
+                updateTestCasesFromStructuredInputs(currentId);
+              });
+
+              const edgeLabelInput = document.createElement("input");
+              edgeLabelInput.type = "text";
+              edgeLabelInput.className = "bg-ovr font-semibold font-jetbrains resize-none border-2 rounded-md px-2 py-1 border-single focus:outline-none text-lg border-border focus:border-border-active w-24";
+              edgeLabelInput.placeholder = "Service";
+              edgeLabelInput.value = parts[2] || "";
+              edgeLabelInput.addEventListener("input", () => {
+                updateTestCasesFromStructuredInputs(currentId);
+              });
+
+              const removeButton = document.createElement("button");
+              removeButton.className = "bg-clear-normal hover:bg-clear-hover active:bg-clear-active inline rounded-md px-2 py-1 text-sm";
+              removeButton.innerHTML = `
+                <svg width="800px" height="800px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="stroke-text w-4 h-4">
+                  <path d="M3 6H5H21" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              `;
+              removeButton.title = "Remove Edge";
+              removeButton.onclick = () => {
+                newRow.remove();
+                // Trigger the processGraphInput function
+                updateTestCasesFromStructuredInputs(currentId);
+              };
+
+              newRow.appendChild(node1Input);
+              newRow.appendChild(node2Input);
+              newRow.appendChild(edgeLabelInput);
+              newRow.appendChild(removeButton);
+              edgeInputsContainer.appendChild(newRow);
+            }
+          });
+          
+          // If no valid lines, add one empty row
+          if (lines.length === 0 || (lines.length === 1 && lines[0].trim() === "")) {
+            const newRow = document.createElement("div");
+            newRow.className = "flex justify-between items-center space-x-2";
+
+            const node1Input = document.createElement("input");
+            node1Input.type = "text";
+            node1Input.className = "bg-ovr font-semibold font-jetbrains resize-none border-2 rounded-md px-2 py-1 border-single focus:outline-none text-lg border-border focus:border-border-active w-24";
+            node1Input.placeholder = "Server";
+            node1Input.addEventListener("input", () => {
+              // Trigger the processGraphInput function
+              updateTestCasesFromStructuredInputs(currentId);
+            });
+
+            const node2Input = document.createElement("input");
+            node2Input.type = "text";
+            node2Input.className = "bg-ovr font-semibold font-jetbrains resize-none border-2 rounded-md px-2 py-1 border-single focus:outline-none text-lg border-border focus:border-border-active w-24";
+            node2Input.placeholder = "Client";
+            node2Input.addEventListener("input", () => {
+              // Trigger the processGraphInput function
+              updateTestCasesFromStructuredInputs(currentId);
+            });
+
+            const edgeLabelInput = document.createElement("input");
+            edgeLabelInput.type = "text";
+            edgeLabelInput.className = "bg-ovr font-semibold font-jetbrains resize-none border-2 rounded-md px-2 py-1 border-single focus:outline-none text-lg border-border focus:border-border-active w-24";
+            edgeLabelInput.placeholder = "Service";
+            edgeLabelInput.addEventListener("input", () => {
+              // Trigger the processGraphInput function
+              updateTestCasesFromStructuredInputs(currentId);
+            });
+
+            const removeButton = document.createElement("button");
+            removeButton.className = "bg-clear-normal hover:bg-clear-hover active:bg-clear-active inline rounded-md px-2 py-1 text-sm";
+            removeButton.innerHTML = `
+              <svg width="800px" height="800px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="stroke-text w-4 h-4">
+                <path d="M3 6H5H21" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            `;
+            removeButton.title = "Remove Edge";
+            removeButton.onclick = () => {
+              newRow.remove();
+              // Trigger the processGraphInput function
+              updateTestCasesFromStructuredInputs(currentId);
+            };
+
+            newRow.appendChild(node1Input);
+            newRow.appendChild(node2Input);
+            newRow.appendChild(edgeLabelInput);
+            newRow.appendChild(removeButton);
+            edgeInputsContainer.appendChild(newRow);
+          }
+          
+          // Trigger processGraphInput directly to update the graph
+          setTimeout(() => {
+            const firstInput = edgeInputsContainer.querySelector("input") as HTMLInputElement;
+            if (firstInput) {
+              // Trigger the event to update the graph
+              updateTestCasesFromStructuredInputs(currentId);
+            }
+          }, 100); // Increased delay to ensure DOM is fully ready
+        }
+        
+        // Remove the old trigger since we're handling it above
+        // const event = new Event('input', { bubbles: true });
+        // textarea.dispatchEvent(event);
+      }
+    } else {
+      // For parent-child format, parse the data and update the fields
+      const lines = data.trim().split('\n');
+      const parentArray: string[] = [];
+      const childArray: string[] = [];
+      const labelsArray: string[] = [];
+      
+      lines.forEach(line => {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 2) {
+          parentArray.push(parts[0]);
+          childArray.push(parts[1]);
+          labelsArray.push(parts[2] || "");
+        }
+      });
+      
+      const parentTextarea = document.getElementById(`graphInputParent${currentId}`) as HTMLTextAreaElement;
+      const childTextarea = document.getElementById(`graphInputChild${currentId}`) as HTMLTextAreaElement;
+      const labelsTextarea = document.getElementById(`graphInputEdgeLabels${currentId}`) as HTMLTextAreaElement;
+      
+      if (parentTextarea) parentTextarea.value = parentArray.join(" ");
+      if (childTextarea) childTextarea.value = childArray.join(" ");
+      if (labelsTextarea) labelsTextarea.value = labelsArray.join(" ");
+      
+      // Trigger the processGraphInput function
+      if (parentTextarea) {
+        updateTestCasesFromStructuredInputs(currentId);
+      }
+    }
+  };
+
+  const updateTestCasesFromStructuredInputs = (inputId: number) => {
+    const edgeInputsContainer = document.getElementById(`edgeInputs${inputId}`);
+    const hiddenTextarea = document.getElementById(`graphInputEdges${inputId}`) as HTMLTextAreaElement;
+    
+    if (edgeInputsContainer && hiddenTextarea) {
+      const edgeRows = edgeInputsContainer.querySelectorAll("div");
+      const edgeData: string[] = [];
+      
+      edgeRows.forEach((row) => {
+        const inputs = row.querySelectorAll("input");
+        if (inputs.length >= 2) {
+          const node1 = (inputs[0] as HTMLInputElement).value.trim();
+          const node2 = (inputs[1] as HTMLInputElement).value.trim();
+          const edgeLabel = inputs.length >= 3 ? (inputs[2] as HTMLInputElement).value.trim() : "";
+          
+          if (node1 && node2) {
+            if (edgeLabel) {
+              edgeData.push(`${node1} ${node2} ${edgeLabel}`);
+            } else {
+              edgeData.push(`${node1} ${node2}`);
+            }
+          }
+        }
+      });
+      
+      // Update hidden textarea with collected data
+      hiddenTextarea.value = edgeData.join("\n");
+      
+      // Parse the graph data and update test cases
+      const parsedGraph = parseGraphInputEdges("", hiddenTextarea.value, "", inputId);
+      
+      if (parsedGraph.status !== "BAD") {
+        setTestCases((testCases) => {
+          const newTestCases = new Map(testCases);
+          newTestCases.set(inputId, {
+            graphEdges: parsedGraph.graph!,
+            graphParChild: newTestCases.get(inputId)!.graphParChild!,
+            inputFormat: "edges",
+          });
+          return newTestCases;
+        });
+      }
+    }
+  };
 
   return (
     <>
@@ -376,12 +613,12 @@ function App() {
           <></>
         )}
 
-        {randomizer ? (
-          <RandomizerScreen
+        {importExport ? (
+          <ImportExportScreen
             settings={settings}
-            setRandomizer={setRandomizer}
-            randomizerConfig={randomizerConfig}
-            setRandomizerConfig={setRandomizerConfig}
+            setImportExport={setImportExport}
+            currentGraphData={getCurrentGraphData()}
+            onImportData={handleImportData}
           />
         ) : (
           <></>
@@ -402,8 +639,7 @@ function App() {
           directed={directed}
           setDirected={setDirected}
           setInit={setInit}
-          setRandomizer={setRandomizer}
-          randomizerConfig={randomizerConfig}
+          setImportExport={setImportExport}
         />
 
         <div className="relative z-0">

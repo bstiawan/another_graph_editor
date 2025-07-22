@@ -6,9 +6,9 @@ import { Settings } from "../types";
 import { ParsedGraph } from "../types";
 import { TestCases } from "../types";
 import { Randomizer } from "../types";
-import { isInteger, padNode, randInt, sortNodes } from "./utils";
+import { isInteger, randInt } from "./utils";
 
-import { generateRandomGraph, generateRandomNodeLabels } from "./generator";
+import { generateRandomGraph } from "./generator";
 
 interface Props {
   settings: Settings;
@@ -70,11 +70,7 @@ export function GraphInput({
             "graphInputEdges" + inputId,
           ) as HTMLTextAreaElement
         ).value,
-        (
-          document.getElementById(
-            "graphInputNodeLabelsEdges" + inputId,
-          ) as HTMLTextAreaElement
-        ).value,
+        "",
         inputId,
       );
       if (parsedGraph.status === "BAD") {
@@ -109,11 +105,7 @@ export function GraphInput({
             "graphInputEdgeLabels" + inputId,
           ) as HTMLTextAreaElement
         ).value,
-        (
-          document.getElementById(
-            "graphInputNodeLabelsParChild" + inputId,
-          ) as HTMLTextAreaElement
-        ).value,
+        "",
         inputId,
       );
       if (parsedGraph.status === "BAD") {
@@ -137,74 +129,6 @@ export function GraphInput({
     setTimeout(() => processGraphInput(), 100);
   }, []);
 
-  const processNodeLabels = () => {
-    if (testCases.get(inputId) === undefined) return;
-    const inputFormat = testCases.get(inputId)!.inputFormat;
-
-    let currentNodes = (
-      document.getElementById(
-        "graphInputCurrentNodes" + inputId,
-      ) as HTMLTextAreaElement
-    ).value
-      .trim()
-      .split(/\s+/)
-      .filter((u) => u.length);
-
-    currentNodes = sortNodes(currentNodes);
-    currentNodes = currentNodes.map((u) => padNode(u, inputId, inputFormat));
-
-    const nodeLabels = (
-      inputFormat === "edges"
-        ? (document.getElementById(
-            "graphInputNodeLabelsEdges" + inputId,
-          ) as HTMLTextAreaElement)
-        : (document.getElementById(
-            "graphInputNodeLabelsParChild" + inputId,
-          ) as HTMLTextAreaElement)
-    ).value
-      .trim()
-      .split(/\s+/)
-      .filter((u) => u.length);
-
-    const len = Math.min(currentNodes.length, nodeLabels.length);
-
-    let mp = new Map<string, string>();
-
-    for (let i = 0; i < len; i++) {
-      if (nodeLabels[i] !== "_") {
-        mp.set(currentNodes[i], nodeLabels[i]);
-      }
-    }
-
-    if (inputFormat === "edges") {
-      setTestCases((testCases) => {
-        const newTestCases = new Map(testCases);
-        newTestCases.set(inputId, {
-          graphEdges: {
-            ...newTestCases.get(inputId)!.graphEdges!,
-            nodeLabels: mp,
-          },
-          graphParChild: newTestCases.get(inputId)!.graphParChild!,
-          inputFormat: "edges",
-        });
-        return newTestCases;
-      });
-    } else {
-      setTestCases((testCases) => {
-        const newTestCases = new Map(testCases);
-        newTestCases.set(inputId, {
-          graphEdges: newTestCases.get(inputId)!.graphEdges!,
-          graphParChild: {
-            ...newTestCases.get(inputId)!.graphParChild!,
-            nodeLabels: mp,
-          },
-          inputFormat: "parentChild",
-        });
-        return newTestCases;
-      });
-    }
-  };
-
   const handleTextAreaKeyDown = (
     e: React.KeyboardEvent<HTMLTextAreaElement>,
   ) => {
@@ -224,176 +148,6 @@ export function GraphInput({
             : "hidden"
         }
       >
-        <h4 className="text-base font-semibold">
-          {settings.language == "en" ? "Current Nodes" : "节点"}
-        </h4>
-        <textarea
-          wrap="off"
-          rows={1}
-          name="graphInputCurrentNodes"
-          id={"graphInputCurrentNodes" + inputId}
-          onChange={processNodeLabels}
-          value={
-            testCases.get(inputId) === undefined
-              ? ""
-              : testCases.get(inputId)!.inputFormat === "edges"
-                ? sortNodes(testCases.get(inputId)!.graphEdges.nodes).join(" ")
-                : sortNodes(testCases.get(inputId)!.graphParChild.nodes).join(
-                    " ",
-                  )
-          }
-          readOnly
-          className="bg-ovr font-semibold font-jetbrains resize-none border-2
-            rounded-md px-2 py-1 border-single focus:outline-none text-lg
-            text-current-nodes border-border w-auto no-scrollbar"
-        ></textarea>
-
-        <h4 className="text-base font-semibold">
-          {settings.language == "en" ? "Node Labels" : "节点标签"}
-        </h4>
-        <textarea
-          wrap="off"
-          name="graphInputNodeLabelsEdges"
-          id={"graphInputNodeLabelsEdges" + inputId}
-          rows={1}
-          onChange={processNodeLabels}
-          onKeyDown={handleTextAreaKeyDown}
-          placeholder={
-            settings.language == "en"
-              ? "TIP: '_' -> empty label"
-              : "提示：'_' -> 空标签"
-          }
-          className={
-            testCases.get(inputId)?.inputFormat === "edges"
-              ? `bg-ovr font-semibold font-jetbrains resize-none border-2
-                rounded-md px-2 py-1 border-single focus:outline-none text-lg
-                border-border focus:border-border-active placeholder-placeholder
-                w-auto no-scrollbar`
-              : "hidden"
-          }
-        ></textarea>
-        <textarea
-          wrap="off"
-          name="graphInputNodeLabelsParChild"
-          id={"graphInputNodeLabelsParChild" + inputId}
-          rows={1}
-          onChange={processNodeLabels}
-          onKeyDown={handleTextAreaKeyDown}
-          placeholder={
-            settings.language == "en"
-              ? "TIP: '_' -> empty label"
-              : "提示：'_' -> 空标签"
-          }
-          className={
-            testCases.get(inputId)?.inputFormat === "parentChild"
-              ? `bg-ovr font-semibold font-jetbrains resize-none border-2
-                rounded-md px-2 py-1 border-single focus:outline-none text-lg
-                border-border focus:border-border-active placeholder-placeholder
-                w-auto no-scrollbar`
-              : "hidden"
-          }
-        ></textarea>
-
-        <br />
-
-        <div className="flex font-light text-sm justify-between">
-          <span>
-            <span>
-              {testCases.get(inputId)?.inputFormat === "edges" ? (
-                <span className="text-selected p-0 hover:cursor-pointer">
-                  {settings.language == "en" ? "Edges" : "边集"}
-                </span>
-              ) : (
-                <span
-                  className="p-0 hover:cursor-pointer"
-                  onClick={() => {
-                    setTestCases((testCases) => {
-                      const newTestCases = new Map(testCases);
-                      newTestCases.set(inputId, {
-                        graphEdges: newTestCases.get(inputId)!.graphEdges,
-                        graphParChild:
-                          newTestCases.get(inputId)!.graphParChild!,
-                        inputFormat: "edges",
-                      });
-                      return newTestCases;
-                    });
-                    let checkbox = document.getElementById(
-                      "inputFormatCheckbox" + inputId,
-                    ) as HTMLInputElement;
-                    checkbox.checked = false;
-                  }}
-                >
-                  {settings.language == "en" ? "Edges" : "边集"}
-                </span>
-              )}
-            </span>
-            <span> | </span>
-            <span>
-              {testCases.get(inputId)?.inputFormat === "parentChild" ? (
-                <span className="text-selected p-0 hover:cursor-pointer">
-                  {settings.language == "en" ? "Parent-Child" : "父亲-子节点"}
-                </span>
-              ) : (
-                <span
-                  className="p-0 hover:cursor-pointer"
-                  onClick={() => {
-                    setTestCases((testCases) => {
-                      const newTestCases = new Map(testCases);
-                      newTestCases.set(inputId, {
-                        graphEdges: newTestCases.get(inputId)!.graphEdges,
-                        graphParChild:
-                          newTestCases.get(inputId)!.graphParChild!,
-                        inputFormat: "parentChild",
-                      });
-                      return newTestCases;
-                    });
-                    let checkbox = document.getElementById(
-                      "inputFormatCheckbox" + inputId,
-                    ) as HTMLInputElement;
-                    checkbox.checked = true;
-                  }}
-                >
-                  {settings.language == "en" ? "Parent-Child" : "父亲-子节点"}
-                </span>
-              )}
-            </span>
-          </span>
-          <label className="relative inline w-9">
-            <input
-              onClick={() => {
-                setTestCases((testCases) => {
-                  const newTestCases = new Map(testCases);
-                  const oldInputFormat = newTestCases.get(inputId)!.inputFormat;
-
-                  newTestCases.set(inputId, {
-                    graphEdges: newTestCases.get(inputId)!.graphEdges,
-                    graphParChild: newTestCases.get(inputId)!.graphParChild!,
-                    inputFormat:
-                      oldInputFormat === "edges" ? "parentChild" : "edges",
-                  });
-                  return newTestCases;
-                });
-              }}
-              type="checkbox"
-              defaultChecked={
-                testCases.get(inputId)?.inputFormat === "parentChild"
-              }
-              id={"inputFormatCheckbox" + inputId}
-              className="peer invisible"
-            />
-            <span
-              className="absolute top-0 left-0 w-9 h-5 cursor-pointer
-                rounded-full bg-toggle-uncheck border-none transition-all
-                duration-75 hover:bg-toggle-hover peer-checked:bg-toggle-check"
-            ></span>
-            <span
-              className="absolute top-0.5 left-0.5 w-4 h-4 bg-toggle-circle
-                rounded-full transition-all duration-75 cursor-pointer
-                peer-checked:translate-x-4"
-            ></span>
-          </label>
-        </div>
-
         <div className="flex font-light text-sm justify-between">
           <span>
             <span>
@@ -407,7 +161,7 @@ export function GraphInput({
                   onClick={() => {
                     setDirected(false);
                     localStorage.setItem("directed", "false");
-                    let checkbox = document.getElementById(
+                    const checkbox = document.getElementById(
                       "directedCheckbox" + inputId,
                     ) as HTMLInputElement;
                     checkbox.checked = false;
@@ -429,7 +183,7 @@ export function GraphInput({
                   onClick={() => {
                     setDirected(true);
                     localStorage.setItem("directed", "true");
-                    let checkbox = document.getElementById(
+                    const checkbox = document.getElementById(
                       "directedCheckbox" + inputId,
                     ) as HTMLInputElement;
                     checkbox.checked = true;
@@ -666,10 +420,6 @@ export function GraphInput({
                 const inputFormat = testCases.get(inputId)!.inputFormat;
                 try {
                   const graphEdges = generateRandomGraph(randomizerConfig);
-                  let nodeLabels = "";
-                  if (randomizerConfig.hasNodeLabel) {
-                    nodeLabels = generateRandomNodeLabels(randomizerConfig);
-                  }
                   let edgeL = 0;
                   let edgeR = 0;
                   if (randomizerConfig.hasEdgeLabel) {
@@ -698,7 +448,7 @@ export function GraphInput({
                     left.delete(e[1]);
                   }
                   if (inputFormat === "edges") {
-                    let edges = document.getElementById(
+                    const edges = document.getElementById(
                       "graphInputEdges" + inputId,
                     ) as HTMLTextAreaElement;
                     let ans = "";
@@ -711,16 +461,11 @@ export function GraphInput({
                       if (i != graphEdges.length - 1) ans += "\n";
                     }
                     edges.value = ans;
-                    (
-                      document.getElementById(
-                        "graphInputNodeLabelsEdges" + inputId,
-                      ) as HTMLTextAreaElement
-                    ).value = nodeLabels;
                   } else {
-                    let ps = document.getElementById(
+                    const ps = document.getElementById(
                       "graphInputParent" + inputId,
                     ) as HTMLTextAreaElement;
-                    let cs = document.getElementById(
+                    const cs = document.getElementById(
                       "graphInputChild" + inputId,
                     ) as HTMLTextAreaElement;
                     let pAns = "";
@@ -748,60 +493,57 @@ export function GraphInput({
                     cs.value = cAns;
                     (
                       document.getElementById(
-                        "graphInputNodeLabelsParChild" + inputId,
-                      ) as HTMLTextAreaElement
-                    ).value = nodeLabels;
-                    (
-                      document.getElementById(
                         "graphInputEdgeLabels" + inputId,
                       ) as HTMLTextAreaElement
                     ).value = eAns;
                   }
                   setRandomizerError(undefined);
                   processGraphInput();
-                } catch (error: any) {
+                } catch (error: unknown) {
                   console.log(error);
-                  if (error.message === `n must be an integer >= 0!`) {
-                    setRandomizerError(
-                      settings.language === "en"
-                        ? `n must be an integer >= 0!`
-                        : `n 必须是非负整数!`,
-                    );
-                  }
-                  if (error.message === `m must be an integer >= 0!`) {
-                    setRandomizerError(
-                      settings.language === "en"
-                        ? `m must be an integer >= 0!`
-                        : `m 必须是非负整数!`,
-                    );
-                  }
-                  if (error.message === `too many edges!`) {
-                    setRandomizerError(
-                      settings.language === "en"
-                        ? `too many edges!`
-                        : `边的数量过多!`,
-                    );
-                  }
-                  if (error.message === `insufficient edges!`) {
-                    setRandomizerError(
-                      settings.language === "en"
-                        ? `insufficient edges!`
-                        : `边的数量过少!`,
-                    );
-                  }
-                  if (error.message === `invalid node label range`) {
-                    setRandomizerError(
-                      settings.language === "en"
-                        ? `invalid node label range`
-                        : `节点标签的范围不合法`,
-                    );
-                  }
-                  if (error.message === `invalid edge label range`) {
-                    setRandomizerError(
-                      settings.language === "en"
-                        ? `invalid edge label range`
-                        : `边的标签的范围不合法`,
-                    );
+                  if (error instanceof Error) {
+                    if (error.message === `n must be an integer >= 0!`) {
+                      setRandomizerError(
+                        settings.language === "en"
+                          ? `n must be an integer >= 0!`
+                          : `n 必须是非负整数!`,
+                      );
+                    }
+                    if (error.message === `m must be an integer >= 0!`) {
+                      setRandomizerError(
+                        settings.language === "en"
+                          ? `m must be an integer >= 0!`
+                          : `m 必须是非负整数!`,
+                      );
+                    }
+                    if (error.message === `too many edges!`) {
+                      setRandomizerError(
+                        settings.language === "en"
+                          ? `too many edges!`
+                          : `边的数量过多!`,
+                      );
+                    }
+                    if (error.message === `insufficient edges!`) {
+                      setRandomizerError(
+                        settings.language === "en"
+                          ? `insufficient edges!`
+                          : `边的数量过少!`,
+                      );
+                    }
+                    if (error.message === `invalid node label range`) {
+                      setRandomizerError(
+                        settings.language === "en"
+                          ? `invalid node label range`
+                          : `节点标签的范围不合法`,
+                      );
+                    }
+                    if (error.message === `invalid edge label range`) {
+                      setRandomizerError(
+                        settings.language === "en"
+                          ? `invalid edge label range`
+                          : `边的标签的范围不合法`,
+                      );
+                    }
                   }
                 }
               }}

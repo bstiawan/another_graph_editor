@@ -28,6 +28,106 @@ export function GraphInput({
 }: Props) {
   const [inputStatus, setInputStatus] = useState<boolean>(true);
 
+  // Function to sort edge rows alphabetically with animation
+  const sortEdgeRows = (inputId: number) => {
+    const edgeInputsContainer = document.getElementById(`edgeInputs${inputId}`) as HTMLDivElement;
+    if (!edgeInputsContainer) return;
+
+    const rows = Array.from(edgeInputsContainer.children) as HTMLDivElement[];
+    if (rows.length <= 1) return; // No need to sort if 1 or fewer rows
+
+    // Track the currently focused element
+    const activeElement = document.activeElement as HTMLInputElement;
+    let focusedInputIndex = -1;
+    let focusedInputType = -1; // 0 = node1, 1 = node2, 2 = edgeLabel
+
+    // Find which input is currently focused
+    if (activeElement && activeElement.tagName === 'INPUT') {
+      rows.forEach((row, rowIndex) => {
+        const inputs = row.querySelectorAll("input");
+        inputs.forEach((input, inputIndex) => {
+          if (input === activeElement) {
+            focusedInputIndex = rowIndex;
+            focusedInputType = inputIndex;
+          }
+        });
+      });
+    }
+
+    // Create array of row data with their positions
+    const rowData = rows.map((row, index) => {
+      const inputs = row.querySelectorAll("input");
+      const node1 = (inputs[0] as HTMLInputElement)?.value.trim() || "";
+      const node2 = (inputs[1] as HTMLInputElement)?.value.trim() || "";
+      const edgeLabel = (inputs[2] as HTMLInputElement)?.value.trim() || "";
+      
+      // Create sortable string (node1 + node2 + edgeLabel)
+      const sortString = `${node1} ${node2} ${edgeLabel}`.toLowerCase();
+      
+      return {
+        row,
+        sortString,
+        originalIndex: index,
+        node1,
+        node2,
+        edgeLabel
+      };
+    });
+
+    // Sort by the combined string
+    rowData.sort((a, b) => a.sortString.localeCompare(b.sortString));
+
+    // Check if sorting is actually needed
+    const needsSorting = rowData.some((item, index) => item.originalIndex !== index);
+    if (!needsSorting) return;
+
+    // Clear container
+    edgeInputsContainer.innerHTML = "";
+
+    // Add rows back in sorted order with animation
+    rowData.forEach((item) => {
+      const row = item.row;
+      
+      // Add transition class for smooth animation
+      row.style.transition = "all 0.3s ease-in-out";
+      row.style.transform = "translateY(0)";
+      
+      // Add to container
+      edgeInputsContainer.appendChild(row);
+      
+      // Trigger reflow to ensure animation works
+      row.offsetHeight;
+      
+      // Remove transition after animation completes
+      setTimeout(() => {
+        row.style.transition = "";
+      }, 300);
+    });
+
+    // Restore focus to the correct input after sorting
+    if (focusedInputIndex !== -1 && focusedInputType !== -1) {
+      // Find the new position of the row that was focused
+      const newRowIndex = rowData.findIndex(item => item.originalIndex === focusedInputIndex);
+      if (newRowIndex !== -1) {
+        const newRow = edgeInputsContainer.children[newRowIndex] as HTMLDivElement;
+        const inputs = newRow.querySelectorAll("input");
+        const targetInput = inputs[focusedInputType] as HTMLInputElement;
+        if (targetInput) {
+          // Restore focus and cursor position
+          setTimeout(() => {
+            targetInput.focus();
+            // Restore cursor to end of text
+            const length = targetInput.value.length;
+            targetInput.setSelectionRange(length, length);
+          }, 50); // Small delay to ensure DOM is ready
+        }
+      }
+    }
+
+    // Re-process graph input after sorting
+    processGraphInput();
+  };
+
   const processGraphInput = () => {
     if (testCases.get(inputId) === undefined) return;
     const inputFormat = testCases.get(inputId)!.inputFormat;
@@ -176,19 +276,31 @@ export function GraphInput({
     node1Input.type = "text";
     node1Input.className = "bg-ovr font-semibold font-jetbrains resize-none border-2 rounded-md px-2 py-1 border-single focus:outline-none text-lg border-border focus:border-border-active w-24";
     node1Input.placeholder = "Server";
-    node1Input.addEventListener("input", () => processGraphInput());
+    node1Input.addEventListener("input", () => {
+      processGraphInput();
+      // Sort after a short delay to allow the input to be processed
+      setTimeout(() => sortEdgeRows(inputId), 100);
+    });
 
     const node2Input = document.createElement("input");
     node2Input.type = "text";
     node2Input.className = "bg-ovr font-semibold font-jetbrains resize-none border-2 rounded-md px-2 py-1 border-single focus:outline-none text-lg border-border focus:border-border-active w-24";
     node2Input.placeholder = "Client";
-    node2Input.addEventListener("input", () => processGraphInput());
+    node2Input.addEventListener("input", () => {
+      processGraphInput();
+      // Sort after a short delay to allow the input to be processed
+      setTimeout(() => sortEdgeRows(inputId), 100);
+    });
 
     const edgeLabelInput = document.createElement("input");
     edgeLabelInput.type = "text";
     edgeLabelInput.className = "bg-ovr font-semibold font-jetbrains resize-none border-2 rounded-md px-2 py-1 border-single focus:outline-none text-lg border-border focus:border-border-active w-24";
     edgeLabelInput.placeholder = "Service";
-    edgeLabelInput.addEventListener("input", () => processGraphInput());
+    edgeLabelInput.addEventListener("input", () => {
+      processGraphInput();
+      // Sort after a short delay to allow the input to be processed
+      setTimeout(() => sortEdgeRows(inputId), 100);
+    });
 
     const removeButton = document.createElement("button");
     removeButton.className = "bg-clear-normal hover:bg-clear-hover active:bg-clear-active inline rounded-md px-2 py-1 text-sm";
@@ -202,6 +314,8 @@ export function GraphInput({
     removeButton.onclick = () => {
       newRow.remove();
       processGraphInput(); // Re-process to update hidden textarea
+      // Sort after removal
+      setTimeout(() => sortEdgeRows(inputId), 100);
     };
 
     newRow.appendChild(node1Input);
@@ -209,6 +323,9 @@ export function GraphInput({
     newRow.appendChild(edgeLabelInput);
     newRow.appendChild(removeButton);
     edgeInputsContainer.appendChild(newRow);
+    
+    // Sort after adding new row
+    setTimeout(() => sortEdgeRows(inputId), 100);
     
     // Focus on the first input for better UX
     node1Input.focus();

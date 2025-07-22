@@ -363,6 +363,8 @@ function App() {
             if (firstInput) {
               // Trigger the event to update the graph
               updateTestCasesFromStructuredInputs(currentId);
+              // Sort the rows after import
+              sortEdgeRows(currentId);
             }
           }, 100); // Increased delay to ensure DOM is fully ready
         }
@@ -400,6 +402,106 @@ function App() {
         updateTestCasesFromStructuredInputs(currentId);
       }
     }
+  };
+
+  // Function to sort edge rows alphabetically with animation
+  const sortEdgeRows = (inputId: number) => {
+    const edgeInputsContainer = document.getElementById(`edgeInputs${inputId}`) as HTMLDivElement;
+    if (!edgeInputsContainer) return;
+
+    const rows = Array.from(edgeInputsContainer.children) as HTMLDivElement[];
+    if (rows.length <= 1) return; // No need to sort if 1 or fewer rows
+
+    // Track the currently focused element
+    const activeElement = document.activeElement as HTMLInputElement;
+    let focusedInputIndex = -1;
+    let focusedInputType = -1; // 0 = node1, 1 = node2, 2 = edgeLabel
+
+    // Find which input is currently focused
+    if (activeElement && activeElement.tagName === 'INPUT') {
+      rows.forEach((row, rowIndex) => {
+        const inputs = row.querySelectorAll("input");
+        inputs.forEach((input, inputIndex) => {
+          if (input === activeElement) {
+            focusedInputIndex = rowIndex;
+            focusedInputType = inputIndex;
+          }
+        });
+      });
+    }
+
+    // Create array of row data with their positions
+    const rowData = rows.map((row, index) => {
+      const inputs = row.querySelectorAll("input");
+      const node1 = (inputs[0] as HTMLInputElement)?.value.trim() || "";
+      const node2 = (inputs[1] as HTMLInputElement)?.value.trim() || "";
+      const edgeLabel = (inputs[2] as HTMLInputElement)?.value.trim() || "";
+      
+      // Create sortable string (node1 + node2 + edgeLabel)
+      const sortString = `${node1} ${node2} ${edgeLabel}`.toLowerCase();
+      
+      return {
+        row,
+        sortString,
+        originalIndex: index,
+        node1,
+        node2,
+        edgeLabel
+      };
+    });
+
+    // Sort by the combined string
+    rowData.sort((a, b) => a.sortString.localeCompare(b.sortString));
+
+    // Check if sorting is actually needed
+    const needsSorting = rowData.some((item, index) => item.originalIndex !== index);
+    if (!needsSorting) return;
+
+    // Clear container
+    edgeInputsContainer.innerHTML = "";
+
+    // Add rows back in sorted order with animation
+    rowData.forEach((item) => {
+      const row = item.row;
+      
+      // Add transition class for smooth animation
+      row.style.transition = "all 0.3s ease-in-out";
+      row.style.transform = "translateY(0)";
+      
+      // Add to container
+      edgeInputsContainer.appendChild(row);
+      
+      // Trigger reflow to ensure animation works
+      row.offsetHeight;
+      
+      // Remove transition after animation completes
+      setTimeout(() => {
+        row.style.transition = "";
+      }, 300);
+    });
+
+    // Restore focus to the correct input after sorting
+    if (focusedInputIndex !== -1 && focusedInputType !== -1) {
+      // Find the new position of the row that was focused
+      const newRowIndex = rowData.findIndex(item => item.originalIndex === focusedInputIndex);
+      if (newRowIndex !== -1) {
+        const newRow = edgeInputsContainer.children[newRowIndex] as HTMLDivElement;
+        const inputs = newRow.querySelectorAll("input");
+        const targetInput = inputs[focusedInputType] as HTMLInputElement;
+        if (targetInput) {
+          // Restore focus and cursor position
+          setTimeout(() => {
+            targetInput.focus();
+            // Restore cursor to end of text
+            const length = targetInput.value.length;
+            targetInput.setSelectionRange(length, length);
+          }, 50); // Small delay to ensure DOM is ready
+        }
+      }
+    }
+
+    // Re-process graph input after sorting
+    updateTestCasesFromStructuredInputs(inputId);
   };
 
   const updateTestCasesFromStructuredInputs = (inputId: number) => {

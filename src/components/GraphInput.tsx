@@ -63,6 +63,37 @@ export function GraphInput({
     }
 
     if (inputFormat === "edges") {
+      // Collect data from structured edge inputs and populate hidden textarea
+      const edgeInputsContainer = document.getElementById(`edgeInputs${inputId}`);
+      const hiddenTextarea = document.getElementById(
+        "graphInputEdges" + inputId,
+      ) as HTMLTextAreaElement;
+      
+      if (edgeInputsContainer && hiddenTextarea) {
+        const edgeRows = edgeInputsContainer.querySelectorAll("div");
+        const edgeData: string[] = [];
+        
+        edgeRows.forEach((row) => {
+          const inputs = row.querySelectorAll("input");
+          if (inputs.length >= 2) {
+            const node1 = (inputs[0] as HTMLInputElement).value.trim();
+            const node2 = (inputs[1] as HTMLInputElement).value.trim();
+            const edgeLabel = inputs.length >= 3 ? (inputs[2] as HTMLInputElement).value.trim() : "";
+            
+            if (node1 && node2) {
+              if (edgeLabel) {
+                edgeData.push(`${node1} ${node2} ${edgeLabel}`);
+              } else {
+                edgeData.push(`${node1} ${node2}`);
+              }
+            }
+          }
+        });
+        
+        // Update hidden textarea with collected data
+        hiddenTextarea.value = edgeData.join("\n");
+      }
+
       parsedGraph = parseGraphInputEdges(
         roots,
         (
@@ -127,6 +158,14 @@ export function GraphInput({
 
   useEffect(() => {
     setTimeout(() => processGraphInput(), 100);
+    
+    // Initialize with one edge row for edges format
+    if (testCases.get(inputId)?.inputFormat === "edges") {
+      const edgeInputsContainer = document.getElementById(`edgeInputs${inputId}`);
+      if (edgeInputsContainer && edgeInputsContainer.children.length === 0) {
+        addEdgeRow(inputId);
+      }
+    }
   }, []);
 
   const handleTextAreaKeyDown = (
@@ -135,6 +174,55 @@ export function GraphInput({
     if (e.key === "Escape") {
       e.currentTarget.blur();
     }
+  };
+
+  const addEdgeRow = (inputId: number) => {
+    const edgeInputsContainer = document.getElementById(
+      `edgeInputs${inputId}`,
+    ) as HTMLDivElement;
+    const newRow = document.createElement("div");
+    newRow.className = "flex justify-between items-center space-x-2";
+
+    const node1Input = document.createElement("input");
+    node1Input.type = "text";
+    node1Input.className = "bg-ovr font-semibold font-jetbrains resize-none border-2 rounded-md px-2 py-1 border-single focus:outline-none text-lg border-border focus:border-border-active w-24";
+    node1Input.placeholder = "Node 1";
+    node1Input.addEventListener("input", () => processGraphInput());
+
+    const node2Input = document.createElement("input");
+    node2Input.type = "text";
+    node2Input.className = "bg-ovr font-semibold font-jetbrains resize-none border-2 rounded-md px-2 py-1 border-single focus:outline-none text-lg border-border focus:border-border-active w-24";
+    node2Input.placeholder = "Node 2";
+    node2Input.addEventListener("input", () => processGraphInput());
+
+    const edgeLabelInput = document.createElement("input");
+    edgeLabelInput.type = "text";
+    edgeLabelInput.className = "bg-ovr font-semibold font-jetbrains resize-none border-2 rounded-md px-2 py-1 border-single focus:outline-none text-lg border-border focus:border-border-active w-24";
+    edgeLabelInput.placeholder = "Label (opt)";
+    edgeLabelInput.addEventListener("input", () => processGraphInput());
+
+    const removeButton = document.createElement("button");
+    removeButton.className = "bg-clear-normal hover:bg-clear-hover active:bg-clear-active inline rounded-md px-2 py-1 text-sm";
+    removeButton.innerHTML = `
+      <svg width="800px" height="800px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="stroke-text w-4 h-4">
+        <path d="M3 6H5H21" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    `;
+    removeButton.title = settings.language == "en" ? "Remove Edge" : "删除边";
+    removeButton.onclick = () => {
+      newRow.remove();
+      processGraphInput(); // Re-process to update hidden textarea
+    };
+
+    newRow.appendChild(node1Input);
+    newRow.appendChild(node2Input);
+    newRow.appendChild(edgeLabelInput);
+    newRow.appendChild(removeButton);
+    edgeInputsContainer.appendChild(newRow);
+    
+    // Focus on the first input for better UX
+    node1Input.focus();
   };
 
   return (
@@ -280,6 +368,33 @@ export function GraphInput({
         >
           {settings.language == "en" ? "Edges" : "边集"}
         </h4>
+        
+        {/* New structured edges input */}
+        <div
+          className={
+            testCases.get(inputId)?.inputFormat === "edges"
+              ? "space-y-2"
+              : "hidden"
+          }
+        >
+          {/* Edge input rows */}
+          <div id={`edgeInputs${inputId}`} className="space-y-2">
+            {/* Edge rows will be dynamically added here */}
+          </div>
+          
+          {/* Add button row */}
+          <div className="flex justify-between items-center">
+            <button
+              className="bg-clear-normal hover:bg-clear-hover
+                active:bg-clear-active inline rounded-md px-2 py-1 text-sm"
+              onClick={() => addEdgeRow(inputId)}
+            >
+              {settings.language == "en" ? "Add Edge" : "添加边"}
+            </button>
+          </div>
+        </div>
+
+        {/* Hidden textarea to maintain compatibility with existing parsing */}
         <textarea
           wrap="off"
           name="graphInputEdges"
@@ -287,13 +402,7 @@ export function GraphInput({
           onChange={processGraphInput}
           onKeyDown={handleTextAreaKeyDown}
           rows={8}
-          className={
-            testCases.get(inputId)?.inputFormat === "edges"
-              ? `font-semibold font-jetbrains resize-none border-2 rounded-md
-                px-2 py-1 border-single focus:outline-none text-lg border-border
-                focus:border-border-active bg-ovr w-auto no-scrollbar`
-              : "hidden"
-          }
+          className="hidden"
         ></textarea>
 
         <h4
@@ -378,6 +487,14 @@ export function GraphInput({
               active:bg-clear-active inline rounded-md px-2 py-1"
             onClick={() => {
               if (testCases.get(inputId)?.inputFormat === "edges") {
+                // Clear structured edge inputs
+                const edgeInputsContainer = document.getElementById(`edgeInputs${inputId}`);
+                if (edgeInputsContainer) {
+                  edgeInputsContainer.innerHTML = "";
+                  // Add one empty row back
+                  addEdgeRow(inputId);
+                }
+                // Also clear hidden textarea
                 (
                   document.getElementById(
                     "graphInputEdges" + inputId,

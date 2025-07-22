@@ -13,7 +13,6 @@ import { edgeLabelPositions, nodePositions } from "./animateGraph";
 import { resizeGraph } from "./animateGraph";
 import { updateGraph } from "./animateGraph";
 import { renderGraphToRenderer } from "./animateGraph";
-import { parseGraphInputEdges } from "./parseGraphInput";
 
 import { SVGRenderer } from "./drawingTools";
 import { CanvasRenderer } from "./drawingTools";
@@ -515,28 +514,82 @@ export function GraphCanvas({
           edges: updatedEdges,
         };
         
-              // Convert updated edges back to input format for proper parsing
-      const updatedEdgesInput = updatedEdges.join('\n');
+              // Manually rebuild adjacency maps while preserving original edge labels
+      const newAdj = new Map<string, string[]>();
+      const newRev = new Map<string, string[]>();
+      const newEdgeLabels = new Map<string, string>();
       
-      // Use the existing parsing function to rebuild the graph data properly
-      const parsedResult = parseGraphInputEdges(
-        "", // roots (empty for now)
-        updatedEdgesInput,
-        "", // nodeLabels (empty for now)
-        currentId
-      );
+      // Initialize adjacency maps for all nodes
+      updatedNodes.forEach(node => {
+        newAdj.set(node, []);
+        newRev.set(node, []);
+      });
       
-      if (parsedResult.status === "OK" && parsedResult.graph) {
-        updatedGraphEdges.adj = parsedResult.graph.adj;
-        updatedGraphEdges.rev = parsedResult.graph.rev;
-        updatedGraphEdges.edgeLabels = parsedResult.graph.edgeLabels;
-        updatedGraphEdges.nodes = parsedResult.graph.nodes;
-        updatedGraphEdges.edges = parsedResult.graph.edges;
-      } else {
-        console.error('Failed to parse updated graph data');
-        setEditingNode(null);
-        return;
-      }
+      // Copy all existing edge labels first
+      console.log('Original edge labels:', currentTestCase?.graphEdges.edgeLabels);
+      console.log('Original edge labels entries:');
+      currentTestCase?.graphEdges.edgeLabels.forEach((label, key) => {
+        console.log(`  "${key}" -> "${label}"`);
+        newEdgeLabels.set(key, label);
+      });
+      
+      // Process each edge and update adjacency maps
+      updatedEdges.forEach(edge => {
+        const parts = edge.split(" ");
+        const u = parts[0];
+        const v = parts[1];
+        
+        // Add to adjacency maps
+        if (!newAdj.get(u)!.includes(v)) {
+          newAdj.get(u)!.push(v);
+        }
+        if (!newRev.get(v)!.includes(u)) {
+          newRev.get(v)!.push(u);
+        }
+        
+        // Check if this edge involves the renamed node
+        if (u === newName || v === newName) {
+          // Find the corresponding old edge key with position
+          let oldEdgeKey = "";
+          if (u === newName) {
+            // This edge starts with the renamed node
+            oldEdgeKey = `${oldName} ${v}`;
+          } else if (v === newName) {
+            // This edge ends with the renamed node
+            oldEdgeKey = `${u} ${oldName}`;
+          }
+          
+          // Try to find the old edge key with position by looking through all original edge labels
+          let foundOldKey = "";
+          let foundLabel = "0";
+          let position = "0";
+          
+          currentTestCase?.graphEdges.edgeLabels.forEach((label, key) => {
+            // Check if this key matches our old edge pattern
+            if (key.startsWith(oldEdgeKey + " ")) {
+              foundOldKey = key;
+              foundLabel = label;
+              // Extract the position from the old key
+              const parts = key.split(" ");
+              position = parts[parts.length - 1];
+            }
+          });
+          
+          // Create new edge key with position
+          const newEdgeKeyWithPosition = `${u} ${v} ${position}`;
+          
+          console.log(`Updating edge label: ${foundOldKey} -> ${newEdgeKeyWithPosition} = ${foundLabel}`);
+          newEdgeLabels.set(newEdgeKeyWithPosition, foundLabel);
+          // Remove the old key
+          if (foundOldKey) {
+            newEdgeLabels.delete(foundOldKey);
+          }
+        }
+      });
+      
+      updatedGraphEdges.adj = newAdj;
+      updatedGraphEdges.rev = newRev;
+      updatedGraphEdges.edgeLabels = newEdgeLabels;
         
         // Update the test case with the new graph
         updatedCurrentTestCase.graphEdges = updatedGraphEdges;

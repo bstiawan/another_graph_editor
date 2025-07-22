@@ -4,6 +4,7 @@ import { getDefaultGraph } from "./utils";
 export interface EdgesParams {
   roots: string;
   edges: string;
+  nodeLabels: string;
 }
 
 export interface ParChildParams {
@@ -11,6 +12,7 @@ export interface ParChildParams {
   parent: string;
   child: string;
   edgeLabels: string;
+  nodeLabels: string;
 }
 
 export function createTestCase(

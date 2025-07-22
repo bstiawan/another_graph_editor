@@ -813,24 +813,26 @@ function renderNodes(renderer: GraphRenderer) {
     renderer.textBaseline = "middle";
     renderer.textAlign = "center";
 
+    // Strip parentheses from node name for display
     const s = stripNode(u);
+    const displayName = s.replace(/\([^)]*\)/g, '').trim();
 
     renderer.font = `${settings.fontSize + 2}px JB`;
     renderer.fillStyle = textColor;
     renderer.fillText(
-      isInteger(s) ? (parseInt(s, 10) + labelOffset).toString() : s,
+      isInteger(s) ? (parseInt(s, 10) + labelOffset).toString() : displayName,
       node!.pos.x,
       node!.pos.y + TEXT_Y_OFFSET,
     );
     
-    // Debug: Show radius information (can be removed in production)
-    if (process.env.NODE_ENV === 'development') {
-      const radius = nodeRadiusMap.get(u) || nodeRadius;
-      const edgeCount = fullAdjSet.get(u)?.size || 0;
+    // Show role label from node name (text inside parentheses)
+    const roleMatch = u.match(/\(([^)]+)\)/);
+    if (roleMatch) {
+      const role = roleMatch[1];
       renderer.font = `${Math.max(8, settings.fontSize - 4)}px JB`;
-      renderer.fillStyle = settings.darkMode ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)';
+      renderer.fillStyle = settings.darkMode ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)';
       renderer.fillText(
-        `${edgeCount}e/${radius.toFixed(1)}px`,
+        role,
         node!.pos.x,
         node!.pos.y + individualNodeRadius + 15,
       );
@@ -1357,9 +1359,6 @@ function calculateNodeRadius(nodeId: string): number {
   // 10% increment per edge, with a minimum of 1 edge
   const edgeMultiplier = 1 + (edgeCount * 0.1);
   const calculatedRadius = baseRadius * edgeMultiplier;
-  
-  // Debug logging (can be removed in production)
-  console.log(`Node ${nodeId}: ${edgeCount} edges, radius ${calculatedRadius.toFixed(1)}px (base: ${baseRadius}px, multiplier: ${edgeMultiplier.toFixed(2)})`);
   
   return calculatedRadius;
 }

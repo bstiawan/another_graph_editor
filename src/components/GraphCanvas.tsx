@@ -150,9 +150,14 @@ export function GraphCanvas({
     }
 
     if (SVGRenderer.fontBase64 === "") {
-      SVGRenderer.fontBase64 = await loadFontAsBase64(
-        "/another_graph_editor/JetBrainsMono-Bold.ttf",
-      );
+      // Determine the correct font path based on environment
+      const isProduction = import.meta.env.PROD;
+      const basePath = import.meta.env.BASE_URL || '';
+      const fontPath = isProduction 
+        ? `${basePath}JetBrainsMono-Bold.ttf`
+        : '/JetBrainsMono-Bold.ttf';
+        
+      SVGRenderer.fontBase64 = await loadFontAsBase64(fontPath);
     }
 
     const pixelRatio = window.devicePixelRatio || 1;
@@ -275,13 +280,20 @@ export function GraphCanvas({
   };
 
   useEffect(() => {
-    const font = new FontFace(
-      "JB",
-      "url(/another_graph_editor/JetBrainsMono-Bold.ttf)",
-    );
+    // Determine the correct font path based on environment
+    const isProduction = import.meta.env.PROD;
+    const basePath = import.meta.env.BASE_URL || '';
+    const fontPath = isProduction 
+      ? `${basePath}JetBrainsMono-Bold.ttf`
+      : '/JetBrainsMono-Bold.ttf';
+    
+    const font = new FontFace("JB", `url(${fontPath})`);
 
-    font.load();
-    document.fonts.add(font);
+    font.load().then(() => {
+      document.fonts.add(font);
+    }).catch((error) => {
+      console.error("Failed to load font:", error);
+    });
 
     const canvasMain = refMain.current;
     const canvasAnnotation = refAnnotation.current;

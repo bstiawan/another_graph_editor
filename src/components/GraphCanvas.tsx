@@ -8,11 +8,12 @@ import { GraphPalette } from "./GraphPalette";
 import { updateDirected } from "./animateGraph";
 import { updateSettings } from "./animateGraph";
 import { animateGraph } from "./animateGraph";
-import { edgeLabelPositions } from "./animateGraph";
+import { edgeLabelPositions, nodePositions } from "./animateGraph";
 
 import { resizeGraph } from "./animateGraph";
 import { updateGraph } from "./animateGraph";
 import { renderGraphToRenderer } from "./animateGraph";
+import { parseGraphInputEdges } from "./parseGraphInput";
 
 import { SVGRenderer } from "./drawingTools";
 import { CanvasRenderer } from "./drawingTools";
@@ -34,6 +35,14 @@ interface EdgeLabelEdit {
   y: number;
   node1: string;
   node2: string;
+}
+
+// Interface for node editing
+interface NodeEdit {
+  nodeId: string;
+  name: string;
+  x: number;
+  y: number;
 }
 
 function oversampleCanvas(
@@ -87,6 +96,13 @@ export function GraphCanvas({
 
   // State for inline edge label editing
   const [editingEdgeLabel, setEditingEdgeLabel] = useState<EdgeLabelEdit | null>(null);
+  
+  // State for inline node editing
+  const [editingNode, setEditingNode] = useState<NodeEdit | null>(null);
+  
+  // State for double-click detection
+  const [lastClickTime, setLastClickTime] = useState(0);
+  const [lastClickNode, setLastClickNode] = useState<string | null>(null);
 
   const downloadImage = (): void => {
     const canvasMain = refMain.current;
@@ -336,7 +352,7 @@ export function GraphCanvas({
     resizeCanvasIndicator();
   }, [settings.expandedCanvas]);
 
-  // Function to handle canvas clicks for edge label editing
+  // Function to handle canvas clicks for edge label editing and node editing
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     if (settings.drawMode !== "node") return; // Only allow editing in node mode
     
@@ -369,6 +385,33 @@ export function GraphCanvas({
             node2: position.node2,
           });
         }
+        break;
+      }
+    }
+
+    // Check if click is on a node (for double-click detection)
+    for (const [nodeId, position] of nodePositions) {
+      const nodeRadius = 16; // Default node radius
+      const distance = Math.sqrt((x - position.x) ** 2 + (y - position.y) ** 2);
+      if (distance <= nodeRadius) {
+        // Handle double-click detection
+        const currentTime = performance.now();
+        if (lastClickNode === nodeId && (currentTime - lastClickTime) < 300) {
+          // Double-click detected - start editing
+          setEditingNode({
+            nodeId,
+            name: nodeId,
+            x: position.x,
+            y: position.y,
+          });
+          setLastClickNode(null);
+          setLastClickTime(0);
+          return;
+        }
+        
+        // Update last click info
+        setLastClickTime(currentTime);
+        setLastClickNode(nodeId);
         break;
       }
     }
@@ -420,6 +463,119 @@ export function GraphCanvas({
   // Function to cancel edge label editing
   const handleCancelEdit = () => {
     setEditingEdgeLabel(null);
+  };
+
+  // Function to handle node name edit completion
+  const handleNodeNameEdit = (newName: string) => {
+    if (!editingNode) return;
+
+    const oldName = editingNode.nodeId;
+    
+    // Validate new name
+    if (!newName.trim()) {
+      setEditingNode(null);
+      return;
+    }
+
+    // Check if new name already exists (excluding the current node)
+    const currentTestCase = testCases.get(currentId);
+    if (currentTestCase && currentTestCase.graphEdges.nodes.includes(newName) && newName !== oldName) {
+      setEditingNode(null);
+      return;
+    }
+
+    try {
+      console.log('Starting node name update:', { oldName, newName, currentId });
+      
+      // Update all edges that contain the old node name
+      const updatedEdges = currentTestCase?.graphEdges.edges.map(edge => {
+        const parts = edge.split(" ");
+        if (parts[0] === oldName) {
+          parts[0] = newName;
+        }
+        if (parts[1] === oldName) {
+          parts[1] = newName;
+        }
+        return parts.join(" ");
+      }) || [];
+      
+      console.log('Updated edges:', updatedEdges);
+
+      // Update nodes array
+      const updatedNodes = currentTestCase?.graphEdges.nodes.map(node => node === oldName ? newName : node) || [];
+
+      // Update the test cases with new data
+      const updatedTestCases = new Map(testCases);
+      const updatedCurrentTestCase = updatedTestCases.get(currentId);
+      if (updatedCurrentTestCase) {
+        // Create a new Graph object to avoid mutation issues
+        const updatedGraphEdges = {
+          ...updatedCurrentTestCase.graphEdges,
+          nodes: updatedNodes,
+          edges: updatedEdges,
+        };
+        
+              // Convert updated edges back to input format for proper parsing
+      const updatedEdgesInput = updatedEdges.join('\n');
+      
+      // Use the existing parsing function to rebuild the graph data properly
+      const parsedResult = parseGraphInputEdges(
+        "", // roots (empty for now)
+        updatedEdgesInput,
+        "", // nodeLabels (empty for now)
+        currentId
+      );
+      
+      if (parsedResult.status === "OK" && parsedResult.graph) {
+        updatedGraphEdges.adj = parsedResult.graph.adj;
+        updatedGraphEdges.rev = parsedResult.graph.rev;
+        updatedGraphEdges.edgeLabels = parsedResult.graph.edgeLabels;
+        updatedGraphEdges.nodes = parsedResult.graph.nodes;
+        updatedGraphEdges.edges = parsedResult.graph.edges;
+      } else {
+        console.error('Failed to parse updated graph data');
+        setEditingNode(null);
+        return;
+      }
+        
+        // Update the test case with the new graph
+        updatedCurrentTestCase.graphEdges = updatedGraphEdges;
+        
+        console.log('Updated test case:', updatedCurrentTestCase);
+      }
+
+      // Update the input fields
+      const edgeInputsContainer = document.getElementById(`edgeInputs${currentId}`) as HTMLDivElement;
+      if (edgeInputsContainer) {
+        const rows = Array.from(edgeInputsContainer.children) as HTMLDivElement[];
+        for (const row of rows) {
+          const inputs = row.querySelectorAll("input");
+          const serverInput = inputs[0] as HTMLInputElement;
+          const clientInput = inputs[1] as HTMLInputElement;
+
+          if (serverInput && serverInput.value.trim() === oldName) {
+            serverInput.value = newName;
+            serverInput.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          if (clientInput && clientInput.value.trim() === oldName) {
+            clientInput.value = newName;
+            clientInput.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }
+      }
+
+      // Update the global state
+      setTestCases(updatedTestCases);
+      setEditingNode(null);
+    } catch (error) {
+      console.error('Error updating node name:', error);
+      setEditingNode(null);
+    }
+  };
+
+  // Function to cancel node editing
+  const handleCancelNodeEdit = () => {
+    setEditingNode(null);
   };
 
   return (
@@ -737,6 +893,37 @@ export function GraphCanvas({
                 }}
                 onBlur={() => handleEdgeLabelEdit(editingEdgeLabel.label)}
                 className="bg-block text-text border border-border rounded px-2 py-1 text-sm font-jetbrains w-24"
+                autoFocus
+              />
+            </div>
+          )}
+
+          {/* Inline editing overlay for nodes */}
+          {editingNode && (
+            <div
+              className="absolute z-10 bg-block border-2 border-border rounded-lg shadow-lg p-2"
+              style={{
+                left: `${editingNode.x}px`,
+                top: `${editingNode.y - 40}px`,
+                transform: 'translateX(-50%)',
+              }}
+            >
+              <input
+                type="text"
+                value={editingNode.name}
+                onChange={(e) => setEditingNode({
+                  ...editingNode,
+                  name: e.target.value
+                })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleNodeNameEdit(editingNode.name);
+                  } else if (e.key === 'Escape') {
+                    handleCancelNodeEdit();
+                  }
+                }}
+                onBlur={() => handleNodeNameEdit(editingNode.name)}
+                className="bg-block text-text border border-border rounded px-2 py-1 text-sm font-jetbrains w-32"
                 autoFocus
               />
             </div>

@@ -186,6 +186,11 @@ let nodeBorderWidthHalf = 1;
 // Add a map to store individual node radii
 const nodeRadiusMap = new Map<string, number>();
 
+// Add a map to store node positions for click detection
+export const nodePositions = new Map<string, { x: number; y: number; nodeId: string }>();
+
+
+
 let nodeLabelColor = NODE_LABEL_LIGHT;
 let nodeLabelOutlineColor = NODE_LABEL_OUTLINE_LIGHT;
 
@@ -414,8 +419,11 @@ function updateVelocities() {
         }
       }
     }
-    for (const v of fullAdjSet.get(node)!) {
-      curNodes.add(v);
+    const fullAdjSetNode = fullAdjSet.get(node);
+    if (fullAdjSetNode) {
+      for (const v of fullAdjSetNode) {
+        curNodes.add(v);
+      }
     }
   }
 
@@ -440,7 +448,9 @@ function updateVelocities() {
 
       let aMag = 150_000 / (2 * Math.pow(dist, 4.5));
 
-      const isEdge = adjSet.get(u)!.has(v) || adjSet.get(v)!.has(u);
+      const adjSetU = adjSet.get(u);
+      const adjSetV = adjSet.get(v);
+      const isEdge = (adjSetU && adjSetU.has(v)) || (adjSetV && adjSetV.has(u));
 
       if (isEdge) {
         aMag = Math.pow(Math.abs(dist - nodeDist), 1.6) / 100_000;
@@ -706,12 +716,19 @@ export function updateGraph(testCases: TestCases) {
     fullAdjSet.set(u, new Set<string>());
   }
   for (const u of nodes) {
-    for (const v of adjSet.get(u)!) {
-      if (u === v) {
-        continue;
+    const adjSetU = adjSet.get(u);
+    if (adjSetU) {
+      for (const v of adjSetU) {
+        if (u === v) {
+          continue;
+        }
+        const fullAdjSetU = fullAdjSet.get(u);
+        const fullAdjSetV = fullAdjSet.get(v);
+        if (fullAdjSetU && fullAdjSetV) {
+          fullAdjSetU.add(v);
+          fullAdjSetV.add(u);
+        }
       }
-      fullAdjSet.get(u)!.add(v);
-      fullAdjSet.get(v)!.add(u);
     }
   }
 
@@ -758,6 +775,9 @@ function resetMisplacedNodes() {
 }
 
 function renderNodes(renderer: GraphRenderer) {
+  // Clear previous node positions
+  nodePositions.clear();
+  
   for (let i = 0; i < nodes.length; i++) {
     const u = nodes[i];
 
@@ -824,6 +844,13 @@ function renderNodes(renderer: GraphRenderer) {
       node!.pos.x,
       node!.pos.y + TEXT_Y_OFFSET,
     );
+    
+    // Store node position for click detection
+    nodePositions.set(u, {
+      x: node!.pos.x,
+      y: node!.pos.y,
+      nodeId: u
+    });
     
     // Show role label from node name (text inside parentheses)
     const roleMatch = u.match(/\(([^)]+)\)/);
@@ -1260,6 +1287,8 @@ export function animateGraph(
       }
     });
 
+
+
     if (draggedNodes.length) {
       draggedNodes = [draggedNodes[draggedNodes.length - 1]];
       canvas.style.cursor = "pointer";
@@ -1370,3 +1399,5 @@ function updateNodeRadii(): void {
     nodeRadiusMap.set(nodeId, calculateNodeRadius(nodeId));
   }
 }
+
+

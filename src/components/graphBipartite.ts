@@ -4,8 +4,8 @@ export function buildBipartite(
   nodes: string[],
   adj: Map<string, string[]>,
 ): [boolean, ColorMap, LayerMap] {
-  let colorMap: ColorMap = new Map<string, number>();
-  let layerMap: LayerMap = new Map<string, Layer>();
+  const colorMap: ColorMap = new Map<string, number>();
+  const layerMap: LayerMap = new Map<string, Layer>();
   
   const adjFull = new Map<string, string[]>();
 
@@ -14,22 +14,35 @@ export function buildBipartite(
   }
 
   for (const u of nodes) {
-    for (const v of adj.get(u)!) {
-      adjFull.set(u, [...adjFull.get(u)!, v]);
-      adjFull.set(v, [...adjFull.get(v)!, u]);
+    const adjU = adj.get(u);
+    if (adjU) {
+      for (const v of adjU) {
+        const adjFullU = adjFull.get(u);
+        const adjFullV = adjFull.get(v);
+        if (adjFullU && adjFullV) {
+          adjFull.set(u, [...adjFullU, v]);
+          adjFull.set(v, [...adjFullV, u]);
+        }
+      }
     }
   }
 
   let okay = true;
 
   const dfs = (u: string): void => {
-    for (const v of adjFull.get(u)!) {
-      if (!colorMap.has(v)) {
-        colorMap.set(v, colorMap.get(u) === 1 ? 2 : 1);
-        layerMap.set(v, [layerMap.get(u)![0] === 1 ? 2 : 1, 2]);
-        dfs(v);
-      } else if (colorMap.get(v) === colorMap.get(u)) {
-        okay = false;
+    const adjFullU = adjFull.get(u);
+    if (adjFullU) {
+      for (const v of adjFullU) {
+        if (!colorMap.has(v)) {
+          colorMap.set(v, colorMap.get(u) === 1 ? 2 : 1);
+          const layerMapU = layerMap.get(u);
+          if (layerMapU) {
+            layerMap.set(v, [layerMapU[0] === 1 ? 2 : 1, 2]);
+          }
+          dfs(v);
+        } else if (colorMap.get(v) === colorMap.get(u)) {
+          okay = false;
+        }
       }
     }
   };

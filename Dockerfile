@@ -6,14 +6,15 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
-COPY pnpm-lock.yaml ./
 
 # Install dependencies
-RUN npm install -g pnpm
-RUN pnpm install --frozen-lockfile
+RUN npm install
 
 # Copy source code
 COPY . .
+
+# Set environment variable for base path
+ENV VITE_BASE_PATH=/
 
 # Build the application
 RUN npm run build

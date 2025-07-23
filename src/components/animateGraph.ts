@@ -115,8 +115,8 @@ function calculateBezierControlPoints(start: Vector2D, end: Vector2D): Vector2D[
   for (const obstacle of obstacles) {
     // Calculate repulsion vector (away from obstacle)
     const repulsionVector = {
-      x: obstacle.x - (start.x + end.x) / 2,
-      y: obstacle.y - (start.y + end.y) / 2
+      x: (start.x + end.x) / 2 - obstacle.x,
+      y: (start.y + end.y) / 2 - obstacle.y
     };
     
     const repulsionDistance = Math.sqrt(repulsionVector.x * repulsionVector.x + repulsionVector.y * repulsionVector.y);
@@ -185,6 +185,18 @@ function drawCurvedEdge(
 ): void {
   const controlPoints = calculateBezierControlPoints(start, end);
   
+  // Calculate perpendicular offset for multi-edge separation
+  let px = start.y - end.y;
+  let py = end.x - start.x;
+  
+  const toFlip = edr % 2 == 0;
+  const distance = euclidDist(start, end);
+  
+  if (distance > 0) {
+    px *= 0.5 * (toFlip ? -1 : 1) * Math.floor((edr + 1) / 2);
+    py *= 0.5 * (toFlip ? -1 : 1) * Math.floor((edr + 1) / 2);
+  }
+  
   renderer.lineWidth = thickness;
   renderer.strokeStyle = edgeColor;
   
@@ -192,17 +204,17 @@ function drawCurvedEdge(
   renderer.moveTo(start.x, start.y);
   
   if (controlPoints.length === 0) {
-    // No control points: straight line
+    // No control points: straight line with offset
     renderer.lineTo(end.x, end.y);
   } else if (controlPoints.length === 1) {
-    // One control point: quadratic Bezier
+    // One control point: quadratic Bezier with offset
     const cp = controlPoints[0];
-    renderer.quadraticCurveTo(cp.x, cp.y, end.x, end.y);
+    renderer.quadraticCurveTo(cp.x + px, cp.y + py, end.x, end.y);
   } else {
-    // Multiple control points: cubic Bezier
+    // Multiple control points: cubic Bezier with offset
     const cp1 = controlPoints[0];
     const cp2 = controlPoints[1];
-    renderer.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, end.x, end.y);
+    renderer.bezierCurveTo(cp1.x + px, cp1.y + py, cp2.x + px, cp2.y + py, end.x, end.y);
   }
   
   renderer.stroke();
@@ -265,8 +277,8 @@ function drawCurvedEdgeLabel(
     const bx = px / distance;
     const by = py / distance;
     
-    px *= 0.37 * (toFlip ? -1 : 1) * Math.floor((edr + 1) / 2);
-    py *= 0.37 * (toFlip ? -1 : 1) * Math.floor((edr + 1) / 2);
+    px *= 0.5 * (toFlip ? -1 : 1) * Math.floor((edr + 1) / 2);
+    py *= 0.5 * (toFlip ? -1 : 1) * Math.floor((edr + 1) / 2);
     
     const mult = toReverse ? -1 : 1;
     
@@ -375,8 +387,8 @@ function drawCurvedArrow(
   const distance = euclidDist(start, end);
   
   if (distance > 0) {
-    px *= 0.375 * (toFlip ? -1 : 1) * Math.floor((edr + 1) / 2);
-    py *= 0.375 * (toFlip ? -1 : 1) * Math.floor((edr + 1) / 2);
+    px *= 0.5 * (toFlip ? -1 : 1) * Math.floor((edr + 1) / 2);
+    py *= 0.5 * (toFlip ? -1 : 1) * Math.floor((edr + 1) / 2);
   }
   
   renderer.lineWidth = 1.5 * thickness;

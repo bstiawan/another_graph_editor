@@ -22,7 +22,7 @@ import { buildBridges } from "./graphBridges";
 
 import { buildMSTs } from "./graphMSTs";
 
-import { drawLine, drawArrow, drawBridge, drawEdgeLabel } from "./drawingTools";
+import { drawBridge } from "./drawingTools";
 import { drawCircle, drawHexagon, drawOctagon } from "./drawingTools";
 import { GraphRenderer } from "./drawingTools";
 
@@ -37,6 +37,373 @@ interface Vector2D {
 
 // Global variable to store edge label positions
 export const edgeLabelPositions = new Map<string, { x: number; y: number; node1: string; node2: string }>();
+
+// Simple Bezier curve system - find obstacles between nodes
+function findObstaclesBetweenNodes(start: Vector2D, end: Vector2D): Vector2D[] {
+  const obstacles: Vector2D[] = [];
+  const safetyMargin = 25; // Extra distance to keep edges away from nodes
+  
+  for (const nodeId of nodes) {
+    if (nodesToConceal.has(nodeId)) continue;
+    
+    const node = nodeMap.get(nodeId)!;
+    const nodeRadius = calculateNodeRadius(nodeId);
+    
+    // Calculate perpendicular distance from node to line
+    const lineVector = { x: end.x - start.x, y: end.y - start.y };
+    const lineLength = Math.sqrt(lineVector.x * lineVector.x + lineVector.y * lineVector.y);
+    
+    if (lineLength === 0) continue; // Avoid division by zero
+    
+    const normalizedLine = { x: lineVector.x / lineLength, y: lineVector.y / lineLength };
+    
+    // Vector from start to node
+    const toNode = { x: node.pos.x - start.x, y: node.pos.y - start.y };
+    
+    // Projection of node onto line
+    const projection = toNode.x * normalizedLine.x + toNode.y * normalizedLine.y;
+    
+    // Closest point on line to the node
+    const closestPoint = {
+      x: start.x + normalizedLine.x * projection,
+      y: start.y + normalizedLine.y * projection
+    };
+    
+    // Distance from node to closest point on line
+    const distanceToLine = euclidDist(node.pos, closestPoint);
+    
+    // Check if projection is within line segment
+    const isOnLine = projection >= 0 && projection <= lineLength;
+    
+    // Check if node is close enough to be an obstacle
+    if (isOnLine && distanceToLine < (nodeRadius + safetyMargin)) {
+      obstacles.push(node.pos);
+    }
+  }
+  
+  return obstacles;
+}
+
+// Simple Bezier curve system - calculate control points
+function calculateBezierControlPoints(start: Vector2D, end: Vector2D): Vector2D[] {
+  const obstacles = findObstaclesBetweenNodes(start, end);
+  
+  if (obstacles.length === 0) {
+    // No obstacles: slight curve for aesthetics
+    const midPoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+    const lineVector = { x: end.x - start.x, y: end.y - start.y };
+    const perpendicular = { x: -lineVector.y, y: lineVector.x };
+    const perpLength = Math.sqrt(perpendicular.x * perpendicular.x + perpendicular.y * perpendicular.y);
+    
+    if (perpLength === 0) return [];
+    
+    // Normalize and scale perpendicular
+    const normalizedPerp = {
+      x: perpendicular.x / perpLength * 15,
+      y: perpendicular.y / perpLength * 15
+    };
+    
+    return [{
+      x: midPoint.x + normalizedPerp.x,
+      y: midPoint.y + normalizedPerp.y
+    }];
+  }
+  
+  // Calculate repulsion from obstacles
+  const totalRepulsion = { x: 0, y: 0 };
+  
+  for (const obstacle of obstacles) {
+    // Calculate repulsion vector (away from obstacle)
+    const repulsionVector = {
+      x: obstacle.x - (start.x + end.x) / 2,
+      y: obstacle.y - (start.y + end.y) / 2
+    };
+    
+    const repulsionDistance = Math.sqrt(repulsionVector.x * repulsionVector.x + repulsionVector.y * repulsionVector.y);
+    
+    if (repulsionDistance === 0) continue;
+    
+    // Normalize and scale repulsion
+    const normalizedRepulsion = {
+      x: repulsionVector.x / repulsionDistance,
+      y: repulsionVector.y / repulsionDistance
+    };
+    
+    // Scale based on how close the obstacle is
+    const scaleFactor = Math.max(0, 50 - repulsionDistance) / 50;
+    
+    totalRepulsion.x += normalizedRepulsion.x * scaleFactor * 60;
+    totalRepulsion.y += normalizedRepulsion.y * scaleFactor * 60;
+  }
+  
+  // Midpoint of the line
+  const midPoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+  
+  if (obstacles.length === 1) {
+    // One obstacle: quadratic Bezier with one control point
+    return [{
+      x: midPoint.x + totalRepulsion.x,
+      y: midPoint.y + totalRepulsion.y
+    }];
+  } else {
+    // Multiple obstacles: cubic Bezier with two control points
+    const lineVector = { x: end.x - start.x, y: end.y - start.y };
+    const lineLength = Math.sqrt(lineVector.x * lineVector.x + lineVector.y * lineVector.y);
+    
+    if (lineLength === 0) return [midPoint, midPoint];
+    
+    // Split the repulsion into two control points
+    const perpendicular = { x: -lineVector.y, y: lineVector.x };
+    const perpLength = Math.sqrt(perpendicular.x * perpendicular.x + perpendicular.y * perpendicular.y);
+    
+    if (perpLength === 0) return [midPoint, midPoint];
+    
+    // First control point: 1/3 along the line + repulsion
+    const cp1 = {
+      x: start.x + lineVector.x / 3 + totalRepulsion.x * 0.8,
+      y: start.y + lineVector.y / 3 + totalRepulsion.y * 0.8
+    };
+    
+    // Second control point: 2/3 along the line + repulsion
+    const cp2 = {
+      x: start.x + lineVector.x * 2 / 3 + totalRepulsion.x * 0.8,
+      y: start.y + lineVector.y * 2 / 3 + totalRepulsion.y * 0.8
+    };
+    
+    return [cp1, cp2];
+  }
+}
+
+// Simple Bezier curve system - draw curved edge
+function drawCurvedEdge(
+  renderer: GraphRenderer,
+  start: Vector2D,
+  end: Vector2D,
+  edr: number,
+  thickness: number,
+  edgeColor: string
+): void {
+  const controlPoints = calculateBezierControlPoints(start, end);
+  
+  renderer.lineWidth = thickness;
+  renderer.strokeStyle = edgeColor;
+  
+  renderer.beginPath();
+  renderer.moveTo(start.x, start.y);
+  
+  if (controlPoints.length === 0) {
+    // No control points: straight line
+    renderer.lineTo(end.x, end.y);
+  } else if (controlPoints.length === 1) {
+    // One control point: quadratic Bezier
+    const cp = controlPoints[0];
+    renderer.quadraticCurveTo(cp.x, cp.y, end.x, end.y);
+  } else {
+    // Multiple control points: cubic Bezier
+    const cp1 = controlPoints[0];
+    const cp2 = controlPoints[1];
+    renderer.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, end.x, end.y);
+  }
+  
+  renderer.stroke();
+}
+
+// Simple Bezier curve system - draw edge label on curved path
+function drawCurvedEdgeLabel(
+  renderer: GraphRenderer,
+  start: Vector2D,
+  end: Vector2D,
+  edr: number,
+  label: string,
+  toReverse: boolean,
+  settings: Settings,
+  nodeBorderWidthHalf: number,
+  edgeLabelColor: string,
+  edgeKey?: string
+): void {
+  const controlPoints = calculateBezierControlPoints(start, end);
+  
+  // Calculate midpoint of the curve
+  let midPoint: Vector2D;
+  
+  if (controlPoints.length === 0) {
+    // Straight line: use geometric midpoint
+    midPoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+  } else if (controlPoints.length === 1) {
+    // Quadratic Bezier: calculate midpoint
+    const cp = controlPoints[0];
+    const t = 0.5;
+    midPoint = {
+      x: Math.pow(1 - t, 2) * start.x + 2 * (1 - t) * t * cp.x + Math.pow(t, 2) * end.x,
+      y: Math.pow(1 - t, 2) * start.y + 2 * (1 - t) * t * cp.y + Math.pow(t, 2) * end.y
+    };
+  } else {
+    // Cubic Bezier: calculate midpoint
+    const cp1 = controlPoints[0];
+    const cp2 = controlPoints[1];
+    const t = 0.5;
+    midPoint = {
+      x: Math.pow(1 - t, 3) * start.x + 
+         3 * Math.pow(1 - t, 2) * t * cp1.x + 
+         3 * (1 - t) * Math.pow(t, 2) * cp2.x + 
+         Math.pow(t, 3) * end.x,
+      y: Math.pow(1 - t, 3) * start.y + 
+         3 * Math.pow(1 - t, 2) * t * cp1.y + 
+         3 * (1 - t) * Math.pow(t, 2) * cp2.y + 
+         Math.pow(t, 3) * end.y
+    };
+  }
+  
+  // Calculate perpendicular offset for multi-edge separation
+  let px = start.y - end.y;
+  let py = end.x - start.x;
+  
+  const toFlip = edr % 2 == 0;
+  const distance = euclidDist(start, end);
+  
+  if (distance > 0) {
+    const bx = px / distance;
+    const by = py / distance;
+    
+    px *= 0.37 * (toFlip ? -1 : 1) * Math.floor((edr + 1) / 2);
+    py *= 0.37 * (toFlip ? -1 : 1) * Math.floor((edr + 1) / 2);
+    
+    const mult = toReverse ? -1 : 1;
+    
+    px += mult * settings.edgeLabelSeparation * bx;
+    py += mult * settings.edgeLabelSeparation * by;
+  }
+  
+  renderer.lineWidth = 2 * nodeBorderWidthHalf;
+  renderer.textBaseline = "middle";
+  renderer.textAlign = "center";
+  renderer.font = `${settings.fontSize}px JB`;
+  renderer.fillStyle = edgeLabelColor;
+  
+  const labelX = midPoint.x + px;
+  const labelY = midPoint.y + py;
+  
+  renderer.fillText(label, labelX, labelY);
+  
+  // Store the edge label position for click detection
+  if (edgeKey) {
+    edgeLabelPositions.set(edgeKey, {
+      x: labelX,
+      y: labelY,
+      node1: `${start.x},${start.y}`,
+      node2: `${end.x},${end.y}`,
+    });
+  }
+}
+
+// Simple Bezier curve system - draw arrow on curved path
+function drawCurvedArrow(
+  renderer: GraphRenderer,
+  start: Vector2D,
+  end: Vector2D,
+  edr: number,
+  toReverse: boolean,
+  thickness: number,
+  nodeRadius: number,
+  edgeColor: string
+): void {
+  const controlPoints = calculateBezierControlPoints(start, end);
+  
+  // Calculate point along the curve for arrow placement
+  let arrowPoint: Vector2D;
+  let directionVector: Vector2D;
+  
+  if (controlPoints.length === 0) {
+    // Straight line: place arrow at center
+    const t = 0.5;
+    arrowPoint = {
+      x: start.x + (end.x - start.x) * t,
+      y: start.y + (end.y - start.y) * t
+    };
+    directionVector = { x: end.x - start.x, y: end.y - start.y };
+  } else if (controlPoints.length === 1) {
+    // Quadratic Bezier: calculate point and tangent at center
+    const cp = controlPoints[0];
+    const t = 0.5;
+    arrowPoint = {
+      x: Math.pow(1 - t, 2) * start.x + 2 * (1 - t) * t * cp.x + Math.pow(t, 2) * end.x,
+      y: Math.pow(1 - t, 2) * start.y + 2 * (1 - t) * t * cp.y + Math.pow(t, 2) * end.y
+    };
+    // Tangent vector
+    directionVector = {
+      x: 2 * (1 - t) * (cp.x - start.x) + 2 * t * (end.x - cp.x),
+      y: 2 * (1 - t) * (cp.y - start.y) + 2 * t * (end.y - cp.y)
+    };
+  } else {
+    // Cubic Bezier: calculate point and tangent at center
+    const cp1 = controlPoints[0];
+    const cp2 = controlPoints[1];
+    const t = 0.5;
+    arrowPoint = {
+      x: Math.pow(1 - t, 3) * start.x + 
+         3 * Math.pow(1 - t, 2) * t * cp1.x + 
+         3 * (1 - t) * Math.pow(t, 2) * cp2.x + 
+         Math.pow(t, 3) * end.x,
+      y: Math.pow(1 - t, 3) * start.y + 
+         3 * Math.pow(1 - t, 2) * t * cp1.y + 
+         3 * (1 - t) * Math.pow(t, 2) * cp2.y + 
+         Math.pow(t, 3) * end.y
+    };
+    // Tangent vector
+    directionVector = {
+      x: 3 * Math.pow(1 - t, 2) * (cp1.x - start.x) + 
+         6 * (1 - t) * t * (cp2.x - cp1.x) + 
+         3 * Math.pow(t, 2) * (end.x - cp2.x),
+      y: 3 * Math.pow(1 - t, 2) * (cp1.y - start.y) + 
+         6 * (1 - t) * t * (cp2.y - cp1.y) + 
+         3 * Math.pow(t, 2) * (end.y - cp2.y)
+    };
+  }
+  
+  // Normalize direction vector
+  const directionLength = Math.sqrt(directionVector.x * directionVector.x + directionVector.y * directionVector.y);
+  if (directionLength === 0) return;
+  
+  const normalizedDirectionX = directionVector.x / directionLength;
+  const normalizedDirectionY = directionVector.y / directionLength;
+  
+  // Calculate perpendicular offset for multi-edge separation
+  let px = start.y - end.y;
+  let py = end.x - start.x;
+  
+  const toFlip = edr % 2 == 0;
+  const distance = euclidDist(start, end);
+  
+  if (distance > 0) {
+    px *= 0.375 * (toFlip ? -1 : 1) * Math.floor((edr + 1) / 2);
+    py *= 0.375 * (toFlip ? -1 : 1) * Math.floor((edr + 1) / 2);
+  }
+  
+  renderer.lineWidth = 1.5 * thickness;
+  renderer.strokeStyle = edgeColor;
+  renderer.fillStyle = edgeColor;
+  
+  const arrowX = arrowPoint.x + px;
+  const arrowY = arrowPoint.y + py;
+  
+  renderer.beginPath();
+  
+  const mult = toReverse ? -1 : 1;
+  
+  renderer.moveTo(arrowX, arrowY);
+  renderer.lineTo(
+    arrowX - mult * (nodeRadius / 2) * (normalizedDirectionX * Math.cos(Math.PI / 6) - normalizedDirectionY * Math.sin(Math.PI / 6)),
+    arrowY - mult * (nodeRadius / 2) * (normalizedDirectionX * Math.sin(Math.PI / 6) + normalizedDirectionY * Math.cos(Math.PI / 6))
+  );
+  renderer.lineTo(
+    arrowX - mult * (nodeRadius / 2) * (normalizedDirectionX * Math.cos(-Math.PI / 6) - normalizedDirectionY * Math.sin(-Math.PI / 6)),
+    arrowY - mult * (nodeRadius / 2) * (normalizedDirectionX * Math.sin(-Math.PI / 6) + normalizedDirectionY * Math.cos(-Math.PI / 6))
+  );
+  renderer.lineTo(arrowX, arrowY);
+  
+  renderer.fill();
+  renderer.stroke();
+}
 
 export class Node {
   pos: Vector2D;
@@ -874,6 +1241,8 @@ export function updateGraph(testCases: TestCases) {
   // Update adaptive multipliers and node radii after building settings and adjacency sets
   updateAdaptiveMultipliers();
   updateNodeRadii();
+  
+
 }
 
 export function resizeGraph(width: number, height: number) {
@@ -1073,31 +1442,31 @@ function renderEdges(renderer: GraphRenderer) {
       bridgeMap.get(eBase)
     ) {
       drawBridge(renderer, pt1, pt2, thickness, nodeRadius, edgeColor);
-    } else {
-      drawLine(renderer, pt1, pt2, edr, thickness, edgeColor);
-    }
+          } else {
+        drawCurvedEdge(renderer, pt1, pt2, edr, thickness, edgeColor);
+      }
 
     renderer.setLineDash([]);
 
-    if (directed) {
-      drawArrow(
-        renderer,
-        pt1,
-        pt2,
-        edr,
-        toReverse,
-        thickness,
-        nodeRadius,
-        edgeColor,
-      );
-    }
+          if (directed) {
+        drawCurvedArrow(
+          renderer,
+          pt1,
+          pt2,
+          edr,
+          toReverse,
+          thickness,
+          nodeRadius,
+          edgeColor,
+        );
+      }
 
     let labelReverse = false;
     if (!settings.multiedgeMode) labelReverse = toReverse;
 
     if (edgeLabels.has(e)) {
       if (!edgeLabels.has(eRev)) {
-        drawEdgeLabel(
+        drawCurvedEdgeLabel(
           renderer,
           pt1,
           pt2,
@@ -1111,7 +1480,7 @@ function renderEdges(renderer: GraphRenderer) {
         );
       } else {
         if (e < eRev) {
-          drawEdgeLabel(
+          drawCurvedEdgeLabel(
             renderer,
             pt1,
             pt2,
@@ -1124,7 +1493,7 @@ function renderEdges(renderer: GraphRenderer) {
             e,
           );
         } else {
-          drawEdgeLabel(
+          drawCurvedEdgeLabel(
             renderer,
             pt1,
             pt2,
@@ -1500,6 +1869,8 @@ export function animateGraph(
       if (!settings.lockMode) {
         updateVelocities();
       }
+      
+
     }, 1000 / FPS);
   };
   animate();

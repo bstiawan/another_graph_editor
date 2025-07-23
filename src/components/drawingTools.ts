@@ -39,6 +39,7 @@ export interface GraphRenderer {
     x: number,
     y: number,
   ): void;
+  quadraticCurveTo(cpx: number, cpy: number, x: number, y: number): void;
 
   // 绘制操作
   fill(): void;
@@ -161,6 +162,10 @@ export class CanvasRenderer implements GraphRenderer {
     this.ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x, y);
   }
 
+  quadraticCurveTo(cpx: number, cpy: number, x: number, y: number): void {
+    this.ctx.quadraticCurveTo(cpx, cpy, x, y);
+  }
+
   fill(): void {
     this.ctx.fill();
   }
@@ -273,6 +278,10 @@ export class SVGRenderer implements GraphRenderer {
     y: number,
   ): void {
     this.currentPath.push(`C${cp1x},${cp1y} ${cp2x},${cp2y} ${x},${y}`);
+  }
+
+  quadraticCurveTo(cpx: number, cpy: number, x: number, y: number): void {
+    this.currentPath.push(`Q${cpx},${cpy} ${x},${y}`);
   }
 
   fill(): void {

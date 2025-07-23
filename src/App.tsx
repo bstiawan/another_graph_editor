@@ -157,7 +157,7 @@ function App() {
     minNodeDistance:
       localStorage.getItem("minNodeDistance") !== null
         ? Number.parseFloat(localStorage.getItem("minNodeDistance")!)
-        : 1,
+        : 2.5,
   });
 
   const [init, setInit] = useState<boolean>(false);

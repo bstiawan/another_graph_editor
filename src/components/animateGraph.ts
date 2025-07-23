@@ -128,6 +128,118 @@ function euclidDist(u: Vector2D, v: Vector2D): number {
   return Math.hypot(u.x - v.x, u.y - v.y);
 }
 
+// Dynamic edge length calculation functions
+function calculateNodeDegrees(): void {
+  nodeDegreesCache.clear();
+  
+  for (const nodeId of nodes) {
+    if (nodesToConceal.has(nodeId)) continue;
+    
+    const neighbors = fullAdjSet.get(nodeId);
+    if (!neighbors) {
+      nodeDegreesCache.set(nodeId, 0);
+      continue;
+    }
+    
+    // Count actual connections (excluding self-loops and concealed nodes)
+    let degree = 0;
+    for (const neighbor of neighbors) {
+      if (neighbor !== nodeId && !nodesToConceal.has(neighbor)) {
+        degree++;
+      }
+    }
+    
+    nodeDegreesCache.set(nodeId, degree);
+  }
+}
+
+function calculateDynamicEdgeLength(nodeA: string, nodeB: string): number {
+  // Create a consistent cache key (sorted to ensure A-B and B-A use same key)
+  const cacheKey = [nodeA, nodeB].sort().join("-");
+  
+  // Check if we have a cached value
+  if (dynamicEdgeLengthCache.has(cacheKey)) {
+    return dynamicEdgeLengthCache.get(cacheKey)!;
+  }
+  
+  // Get node degrees from cache
+  const degreeA = nodeDegreesCache.get(nodeA) || 0;
+  const degreeB = nodeDegreesCache.get(nodeB) || 0;
+  
+  // Calculate dynamic edge length based on adaptive multipliers
+  const baseLength = settings.edgeLength + 2 * nodeRadius;
+  
+  // Ensure adaptiveMultipliers is available (fallback to defaults)
+  const multipliers = adaptiveMultipliers || { isolated: 2.0, center: 1.5, periphery: 0.7 };
+  
+  let dynamicLength: number;
+  
+  // Determine edge type and use appropriate adaptive multiplier
+  if (degreeA === 1 && degreeB === 1) {
+    // Isolated pair: use isolated multiplier
+    dynamicLength = baseLength * multipliers.isolated;
+  } else if (degreeA > 2 && degreeB > 2) {
+    // Center to center: use center multiplier
+    dynamicLength = baseLength * multipliers.center;
+  } else {
+    // Periphery to center: use periphery multiplier
+    dynamicLength = baseLength * multipliers.periphery;
+  }
+  
+  // Ensure the length is reasonable
+  dynamicLength = Math.max(dynamicLength, 10); // Minimum length
+  
+  // Cache the result
+  dynamicEdgeLengthCache.set(cacheKey, dynamicLength);
+  
+  return dynamicLength;
+}
+
+function updateDynamicEdgeLengthCache(): void {
+  dynamicEdgeLengthCache.clear();
+  calculateNodeDegrees();
+  
+  // Pre-calculate edge lengths for all edges
+  for (const edge of edges) {
+    const parts = edge.split(" ");
+    if (parts.length >= 2) {
+      const [nodeA, nodeB] = parts;
+      if (!nodesToConceal.has(nodeA) && !nodesToConceal.has(nodeB)) {
+        calculateDynamicEdgeLength(nodeA, nodeB);
+      }
+    }
+  }
+}
+
+function updateAdaptiveMultipliers(): void {
+  const totalNodes = nodes.length;
+  const totalEdges = edges.length;
+  
+  // Safety checks to prevent division by zero and invalid calculations
+  if (totalNodes === 0) {
+    // Fallback to default values if no nodes
+    adaptiveMultipliers = { isolated: 2.0, center: 1.5, periphery: 0.7 };
+    return;
+  }
+  
+  const avgDegree = totalEdges * 2 / totalNodes;
+  
+  // Base multipliers that scale with graph size
+  const sizeFactor = Math.log(Math.max(totalNodes, 1)) / Math.log(10); // Prevent log(0)
+  const densityFactor = avgDegree / 3; // Normalize around degree 3
+  
+  adaptiveMultipliers = {
+    isolated: 2.0 + (sizeFactor * 0.1) + (densityFactor * 0.2),
+    center: 1.5 + (sizeFactor * 0.05) + (densityFactor * 0.1),
+    periphery: 0.7 - (sizeFactor * 0.02) - (densityFactor * 0.05)
+  };
+  
+  // Ensure reasonable bounds
+  adaptiveMultipliers.isolated = Math.max(adaptiveMultipliers.isolated, 1.5);
+  adaptiveMultipliers.center = Math.max(adaptiveMultipliers.center, 1.2);
+  adaptiveMultipliers.periphery = Math.max(adaptiveMultipliers.periphery, 0.4);
+}
+
 const FPS = 90;
 
 const STROKE_COLOR_LIGHT = "hsl(0, 0%, 10%)";
@@ -261,6 +373,13 @@ const nodeMap = new Map<string, Node>();
 const testCaseMap = new Map<number, number>();
 
 let nodeDist: number = 40;
+
+// Dynamic edge length caching maps
+const dynamicEdgeLengthCache = new Map<string, number>();
+const nodeDegreesCache = new Map<string, number>();
+
+// Global adaptive multipliers (updated when graph changes)
+let adaptiveMultipliers = { isolated: 2.0, center: 1.5, periphery: 0.7 };
 
 let nodeLabels = new Map<string, string>();
 
@@ -453,8 +572,10 @@ function updateVelocities() {
       const isEdge = (adjSetU && adjSetU.has(v)) || (adjSetV && adjSetV.has(u));
 
       if (isEdge) {
-        aMag = Math.pow(Math.abs(dist - nodeDist), 1.6) / 100_000;
-        if (dist >= nodeDist) {
+        // Use dynamic edge length instead of static nodeDist
+        const dynamicEdgeLength = calculateDynamicEdgeLength(u, v);
+        aMag = Math.pow(Math.abs(dist - dynamicEdgeLength), 1.6) / 100_000;
+        if (dist >= dynamicEdgeLength) {
           aMag *= -1;
         }
       }
@@ -585,6 +706,9 @@ function buildSettings(): void {
   nodeDist = settings.edgeLength + 2 * nodeRadius;
 
   labelOffset = settings.labelOffset;
+  
+  // Update dynamic edge length cache when settings change
+  updateDynamicEdgeLengthCache();
 
   colorMap = undefined;
   layerMap = undefined;
@@ -747,7 +871,8 @@ export function updateGraph(testCases: TestCases) {
 
   buildSettings();
   
-  // Update node radii after building settings and adjacency sets
+  // Update adaptive multipliers and node radii after building settings and adjacency sets
+  updateAdaptiveMultipliers();
   updateNodeRadii();
 }
 

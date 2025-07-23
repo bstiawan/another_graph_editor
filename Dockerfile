@@ -28,7 +28,7 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Create nginx configuration to handle font files properly
 RUN echo 'server { \
     listen 80; \
-    server_name localhost; \
+    server_name _; \
     root /usr/share/nginx/html; \
     index index.html; \
     \

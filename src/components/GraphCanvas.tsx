@@ -679,22 +679,10 @@ export function GraphCanvas({
                 xmlns="http://www.w3.org/2000/svg"
                 className="stroke-text"
               >
-                <path
-                  d="M9 9L15 15"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M15 9L9 15"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
                 <circle
                   cx="12"
                   cy="12"
-                  r="9"
+                  r="8"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"

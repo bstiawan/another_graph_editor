@@ -13,8 +13,8 @@ RUN npm install
 # Copy source code
 COPY . .
 
-# Set environment variable for base path
-ENV VITE_BASE_PATH=/
+# Set environment variable for base path to use relative paths
+ENV VITE_BASE_PATH=./
 
 # Build the application
 RUN npm run build
@@ -25,10 +25,10 @@ FROM nginx:alpine AS production
 # Copy built application from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Create nginx configuration to handle font files properly
+# Create nginx configuration that serves the app from any path
 RUN echo 'server { \
     listen 80; \
-    server_name localhost; \
+    server_name _; \
     root /usr/share/nginx/html; \
     index index.html; \
     \
@@ -39,9 +39,26 @@ RUN echo 'server { \
         add_header Cache-Control "public, immutable"; \
     } \
     \
-    # Handle all other static files \
+    # Handle JavaScript, CSS, and other static assets \
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ { \
+        expires 1y; \
+        add_header Cache-Control "public, immutable"; \
+        try_files $uri =404; \
+    } \
+    \
+    # Serve the app from any path - SPA routing \
     location / { \
         try_files $uri $uri/ /index.html; \
+    } \
+    \
+    # Handle subpaths like /chart, /app, /anything \
+    location ~ ^/[^/]+/ { \
+        try_files $uri $uri/ /index.html; \
+    } \
+    \
+    # Handle any other path pattern \
+    location ~ ^/[^/]+$ { \
+        try_files $uri /index.html; \
     } \
 }' > /etc/nginx/conf.d/default.conf
 
@@ -49,4 +66,4 @@ RUN echo 'server { \
 EXPOSE 80
 
 # Start nginx
-CMD ["nginx", "-g", "daemon off;"] 
+CMD ["nginx", "-g", "daemon off;"]

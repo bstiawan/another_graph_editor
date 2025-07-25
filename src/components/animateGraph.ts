@@ -258,7 +258,7 @@ const NODE_LABEL_OUTLINE_DARK = "hsl(10, 2%, 30%)";
 
 const TEXT_Y_OFFSET = 1;
 
-const NODE_FRICTION = 0.05;
+const NODE_FRICTION = 0.1;
 
 const CANVAS_FIELD_DIST = 50;
 
@@ -577,6 +577,19 @@ function updateVelocities() {
         aMag = Math.pow(Math.abs(dist - dynamicEdgeLength), 1.6) / 100_000;
         if (dist >= dynamicEdgeLength) {
           aMag *= -1;
+        }
+      } else {
+        // Smoother repulsion for unconnected nodes
+        const unconnectedRepulsionForce = 200_000; // Reduced force for smoother movement
+        const unconnectedRepulsionRadius = 100; // Larger radius for unconnected nodes
+        
+        if (dist < unconnectedRepulsionRadius) {
+          // Smooth force curve with gradual falloff
+          const normalizedDist = dist / unconnectedRepulsionRadius;
+          const smoothFactor = Math.pow(1 - normalizedDist, 2); // Quadratic falloff
+          aMag = unconnectedRepulsionForce * smoothFactor / Math.pow(dist, 2); // Gentler falloff
+        } else {
+          aMag = 0; // No force outside radius
         }
       }
 

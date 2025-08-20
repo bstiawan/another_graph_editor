@@ -421,6 +421,15 @@ let positionMap: PositionMap | undefined = undefined;
 let testCaseBoundingBoxes: Map<number, Bounds> | undefined = undefined;
 
 // Position persistence utility functions
+
+// Interface for saved node data with backward compatibility
+interface SavedNodeData {
+  x: number;
+  y: number;
+  selected?: boolean;
+  markColor?: number;
+}
+
 function saveNodePositions(testCaseId: number): void {
   console.log('saveNodePositions called with testCaseId:', testCaseId);
   console.log('settings.persistNodePositions:', settings.persistNodePositions);
@@ -436,22 +445,28 @@ function saveNodePositions(testCaseId: number): void {
     return;
   }
   
-  const positions: Record<string, { x: number; y: number }> = {};
+  // Enhanced data structure to include marking state
+  const nodeData: Record<string, SavedNodeData> = {};
   
   nodes.forEach(nodeId => {
     const node = nodeMap.get(nodeId);
     if (node) {
-      positions[nodeId] = { x: node.pos.x, y: node.pos.y };
+      nodeData[nodeId] = {
+        x: node.pos.x,
+        y: node.pos.y,
+        selected: node.selected,
+        markColor: node.markColor
+      };
     }
   });
   
-  console.log('Saving positions:', positions);
+  console.log('Saving enhanced node data:', nodeData);
   
   try {
-    localStorage.setItem(`nodePositions_${testCaseId}`, JSON.stringify(positions));
-    console.log('Positions saved successfully to localStorage');
+    localStorage.setItem(`nodePositions_${testCaseId}`, JSON.stringify(nodeData));
+    console.log('Enhanced node data saved successfully to localStorage');
   } catch (error) {
-    console.warn('Failed to save node positions to localStorage:', error);
+    console.warn('Failed to save enhanced node data to localStorage:', error);
   }
 }
 
@@ -475,47 +490,78 @@ function loadNodePositions(testCaseId: number): void {
     console.log('Loaded from localStorage:', saved);
     
     if (saved) {
-      const positions = JSON.parse(saved);
+      const nodeData = JSON.parse(saved);
       
-      // Validate that positions is an object
-      if (typeof positions !== 'object' || positions === null || Array.isArray(positions)) {
-        console.warn('Invalid position data format in localStorage');
+      // Validate that nodeData is an object
+      if (typeof nodeData !== 'object' || nodeData === null || Array.isArray(nodeData)) {
+        console.warn('Invalid node data format in localStorage');
         return;
       }
       
-      console.log('Parsed positions:', positions);
+      console.log('Parsed node data:', nodeData);
       
       let loadedCount = 0;
-      Object.entries(positions).forEach(([nodeId, pos]) => {
+      let enhancedDataCount = 0;
+      
+      Object.entries(nodeData).forEach(([nodeId, data]) => {
         const node = nodeMap.get(nodeId);
         if (node && 
-            typeof pos === 'object' && 
-            pos !== null && 
-            'x' in pos && 
-            'y' in pos &&
-            typeof (pos as any).x === 'number' && 
-            typeof (pos as any).y === 'number') {
-          // Validate position is within canvas bounds
-          const x = Math.max(nodeRadius, Math.min(canvasWidth - nodeRadius, (pos as any).x));
-          const y = Math.max(nodeRadius, Math.min(canvasHeight - nodeRadius, (pos as any).y));
+            typeof data === 'object' && 
+            data !== null && 
+            'x' in data && 
+            'y' in data &&
+            typeof (data as SavedNodeData).x === 'number' && 
+            typeof (data as SavedNodeData).y === 'number') {
+          
+          // Validate and apply position data
+          const x = Math.max(nodeRadius, Math.min(canvasWidth - nodeRadius, (data as SavedNodeData).x));
+          const y = Math.max(nodeRadius, Math.min(canvasHeight - nodeRadius, (data as SavedNodeData).y));
           node.pos.x = x;
           node.pos.y = y;
+          
+          // Enhanced data handling with backward compatibility
+          if ('selected' in data && typeof (data as SavedNodeData).selected === 'boolean') {
+            node.selected = (data as SavedNodeData).selected!;
+            enhancedDataCount++;
+            console.log(`Applied marking state for node ${nodeId}: selected=${node.selected}`);
+          } else {
+            // Backward compatibility: default to unmarked for old data
+            node.selected = false;
+            console.log(`Applied default marking state for node ${nodeId}: selected=false (backward compatibility)`);
+          }
+          
+          if ('markColor' in data && (typeof (data as SavedNodeData).markColor === 'number' || (data as SavedNodeData).markColor === undefined)) {
+            node.markColor = (data as SavedNodeData).markColor;
+            if (node.markColor !== undefined) {
+              console.log(`Applied mark color for node ${nodeId}: markColor=${node.markColor}`);
+            }
+          } else {
+            // Backward compatibility: default to undefined for old data
+            node.markColor = undefined;
+            console.log(`Applied default mark color for node ${nodeId}: markColor=undefined (backward compatibility)`);
+          }
+          
           loadedCount++;
           console.log(`Applied position for node ${nodeId}:`, { x, y });
         }
       });
       
-      console.log(`Positions loaded successfully for ${loadedCount} nodes`);
+      console.log(`Node data loaded successfully for ${loadedCount} nodes`);
+      if (enhancedDataCount > 0) {
+        console.log(`Enhanced marking data applied to ${enhancedDataCount} nodes`);
+      } else {
+        console.log('Loaded legacy position-only data (backward compatibility mode)');
+      }
     } else {
-      console.log('No saved positions found');
+      console.log('No saved node data found');
     }
   } catch (error) {
-    console.warn('Failed to load node positions from localStorage:', error);
+    console.warn('Failed to load node data from localStorage:', error);
     // Clear corrupted data
     try {
       localStorage.removeItem(`nodePositions_${testCaseId}`);
     } catch (clearError) {
-      console.warn('Failed to clear corrupted position data:', clearError);
+      console.warn('Failed to clear corrupted node data:', clearError);
     }
   }
 }
@@ -523,18 +569,19 @@ function loadNodePositions(testCaseId: number): void {
 function clearNodePositions(testCaseId: number): void {
   try {
     localStorage.removeItem(`nodePositions_${testCaseId}`);
+    console.log(`Cleared node data for test case ${testCaseId}`);
   } catch (error) {
-    console.warn('Failed to clear node positions from localStorage:', error);
+    console.warn('Failed to clear node data from localStorage:', error);
   }
 }
 
 export function resetNodePositions(testCaseId: number): void {
   if (!settings.persistNodePositions) return;
   
-  // Clear saved positions
+  // Clear saved data
   clearNodePositions(testCaseId);
   
-  // Regenerate random positions for all nodes
+  // Regenerate random positions for all nodes and reset marking state
   nodes.forEach(nodeId => {
     const node = nodeMap.get(nodeId);
     if (node) {
@@ -544,11 +591,15 @@ export function resetNodePositions(testCaseId: number): void {
       // Reset velocity and displacement
       node.vel = { x: 0, y: 0 };
       node.displacement = { x: 0, y: 0 };
+      // Reset marking state
+      node.selected = false;
+      node.markColor = undefined;
     }
   });
   
-  // Save the new random positions
+  // Save the new random positions and reset marking state
   saveNodePositions(testCaseId);
+  console.log('Reset node positions and marking state, saved to localStorage');
 }
 
 function updateNodes(graphNodes: string[], testCaseId?: number): void {
@@ -1061,7 +1112,7 @@ export function resizeGraph(width: number, height: number) {
   canvasWidth = width;
   canvasHeight = height;
   
-  // Save positions after resize if persistence is enabled
+  // Save enhanced node data after resize if persistence is enabled
   if (settings.persistNodePositions) {
     saveNodePositions(currentTestCaseId);
   }
@@ -1644,7 +1695,7 @@ export function animateGraph(
       }
     }
     
-    // Save positions immediately when dragging ends if persistence is enabled
+    // Save enhanced node data immediately when dragging ends if persistence is enabled
     if (draggedNodes.length > 0 && settings.persistNodePositions) {
       saveNodePositions(currentTestCaseId);
     }
@@ -1692,9 +1743,9 @@ export function animateGraph(
       if (!settings.lockMode) {
         updateVelocities();
         
-        // Save node positions periodically if persistence is enabled
+        // Save enhanced node data periodically if persistence is enabled
         if (settings.persistNodePositions) {
-          // Save positions every 30 frames (roughly every 1/3 second at 90 FPS)
+          // Save data every 30 frames (roughly every 1/3 second at 90 FPS)
           if (performance.now() % 300 < 16) { // 16ms is roughly one frame at 90 FPS
             saveNodePositions(currentTestCaseId);
           }

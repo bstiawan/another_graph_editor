@@ -38,6 +38,13 @@ interface Vector2D {
 // Global variable to store edge label positions
 export const edgeLabelPositions = new Map<string, { x: number; y: number; node1: string; node2: string }>();
 
+// Global variable to store current test case ID for position persistence
+let currentTestCaseId: number = 0;
+
+export function setCurrentTestCaseId(testCaseId: number): void {
+  currentTestCaseId = testCaseId;
+}
+
 export class Node {
   pos: Vector2D;
   vel: Vector2D = { x: 0, y: 0 };
@@ -363,6 +370,9 @@ let settings: Settings = {
   collisionAvoidance: true,
   minNodeDistance: 0.5,
   collisionStrength: 1.0,
+  persistNodePositions: localStorage.getItem("persistNodePositions") !== null 
+    ? localStorage.getItem("persistNodePositions") === "true" 
+    : true,
 };
 
 let lastDeletedNodePos: Vector2D = { x: -1, y: -1 };
@@ -410,7 +420,138 @@ let bridgeMap: BridgeMap | undefined = undefined;
 let positionMap: PositionMap | undefined = undefined;
 let testCaseBoundingBoxes: Map<number, Bounds> | undefined = undefined;
 
-function updateNodes(graphNodes: string[]): void {
+// Position persistence utility functions
+function saveNodePositions(testCaseId: number): void {
+  console.log('saveNodePositions called with testCaseId:', testCaseId);
+  console.log('settings.persistNodePositions:', settings.persistNodePositions);
+  console.log('Current nodes count:', nodes.length);
+  
+  if (!settings.persistNodePositions) {
+    console.log('Position persistence is disabled, not saving');
+    return;
+  }
+  
+  if (nodes.length === 0) {
+    console.log('No nodes to save positions for, skipping');
+    return;
+  }
+  
+  const positions: Record<string, { x: number; y: number }> = {};
+  
+  nodes.forEach(nodeId => {
+    const node = nodeMap.get(nodeId);
+    if (node) {
+      positions[nodeId] = { x: node.pos.x, y: node.pos.y };
+    }
+  });
+  
+  console.log('Saving positions:', positions);
+  
+  try {
+    localStorage.setItem(`nodePositions_${testCaseId}`, JSON.stringify(positions));
+    console.log('Positions saved successfully to localStorage');
+  } catch (error) {
+    console.warn('Failed to save node positions to localStorage:', error);
+  }
+}
+
+function loadNodePositions(testCaseId: number): void {
+  console.log('loadNodePositions called with testCaseId:', testCaseId);
+  console.log('settings.persistNodePositions:', settings.persistNodePositions);
+  console.log('Current nodes count:', nodes.length);
+  
+  if (!settings.persistNodePositions) {
+    console.log('Position persistence is disabled, not loading');
+    return;
+  }
+  
+  if (nodes.length === 0) {
+    console.log('No nodes to load positions for, skipping');
+    return;
+  }
+  
+  try {
+    const saved = localStorage.getItem(`nodePositions_${testCaseId}`);
+    console.log('Loaded from localStorage:', saved);
+    
+    if (saved) {
+      const positions = JSON.parse(saved);
+      
+      // Validate that positions is an object
+      if (typeof positions !== 'object' || positions === null || Array.isArray(positions)) {
+        console.warn('Invalid position data format in localStorage');
+        return;
+      }
+      
+      console.log('Parsed positions:', positions);
+      
+      let loadedCount = 0;
+      Object.entries(positions).forEach(([nodeId, pos]) => {
+        const node = nodeMap.get(nodeId);
+        if (node && 
+            typeof pos === 'object' && 
+            pos !== null && 
+            'x' in pos && 
+            'y' in pos &&
+            typeof (pos as any).x === 'number' && 
+            typeof (pos as any).y === 'number') {
+          // Validate position is within canvas bounds
+          const x = Math.max(nodeRadius, Math.min(canvasWidth - nodeRadius, (pos as any).x));
+          const y = Math.max(nodeRadius, Math.min(canvasHeight - nodeRadius, (pos as any).y));
+          node.pos.x = x;
+          node.pos.y = y;
+          loadedCount++;
+          console.log(`Applied position for node ${nodeId}:`, { x, y });
+        }
+      });
+      
+      console.log(`Positions loaded successfully for ${loadedCount} nodes`);
+    } else {
+      console.log('No saved positions found');
+    }
+  } catch (error) {
+    console.warn('Failed to load node positions from localStorage:', error);
+    // Clear corrupted data
+    try {
+      localStorage.removeItem(`nodePositions_${testCaseId}`);
+    } catch (clearError) {
+      console.warn('Failed to clear corrupted position data:', clearError);
+    }
+  }
+}
+
+function clearNodePositions(testCaseId: number): void {
+  try {
+    localStorage.removeItem(`nodePositions_${testCaseId}`);
+  } catch (error) {
+    console.warn('Failed to clear node positions from localStorage:', error);
+  }
+}
+
+export function resetNodePositions(testCaseId: number): void {
+  if (!settings.persistNodePositions) return;
+  
+  // Clear saved positions
+  clearNodePositions(testCaseId);
+  
+  // Regenerate random positions for all nodes
+  nodes.forEach(nodeId => {
+    const node = nodeMap.get(nodeId);
+    if (node) {
+      const coords = generateRandomCoords();
+      node.pos.x = coords.x;
+      node.pos.y = coords.y;
+      // Reset velocity and displacement
+      node.vel = { x: 0, y: 0 };
+      node.displacement = { x: 0, y: 0 };
+    }
+  });
+  
+  // Save the new random positions
+  saveNodePositions(testCaseId);
+}
+
+function updateNodes(graphNodes: string[], testCaseId?: number): void {
   const deletedNodes: string[] = [];
 
   for (const u of nodes) {
@@ -424,6 +565,12 @@ function updateNodes(graphNodes: string[]): void {
   for (const u of deletedNodes) {
     lastDeletedNodePos = nodeMap.get(u)!.pos;
     nodeMap.delete(u);
+  }
+  
+  // Clear positions for deleted nodes if persistence is enabled
+  if (deletedNodes.length > 0 && settings.persistNodePositions) {
+    // We'll save the updated positions after processing all nodes
+    // This ensures we don't have orphaned position data
   }
 
   for (let i = 0; i < graphNodes.length; i++) {
@@ -444,6 +591,16 @@ function updateNodes(graphNodes: string[]): void {
   }
 
   nodes = graphNodes;
+  
+  // Load saved positions if test case ID is provided and persistence is enabled
+  if (testCaseId !== undefined) {
+    loadNodePositions(testCaseId);
+  }
+  
+  // Save updated positions after processing all nodes if persistence is enabled
+  if (testCaseId !== undefined && settings.persistNodePositions) {
+    saveNodePositions(testCaseId);
+  }
 }
 
 function updateEdges(graphEdges: string[]): void {
@@ -836,7 +993,18 @@ export function updateGraph(testCases: TestCases) {
 
   localStorage.setItem("isEdgeNumeric", isEdgeNumeric.toString());
 
-  updateNodes(rawNodes);
+  // Get the current test case ID from the testCases map
+  let currentTestCaseId: number = 0;
+  testCases.forEach((_, testCaseNumber) => {
+    if (testCaseNumber === 0) { // Assuming the first test case is the current one
+      currentTestCaseId = testCaseNumber;
+    }
+  });
+
+  // Set the global current test case ID for position persistence
+  setCurrentTestCaseId(currentTestCaseId);
+
+  updateNodes(rawNodes, currentTestCaseId);
   updateEdges(rawEdges);
 
   adj = new Map<string, string[]>(rawAdj);
@@ -892,6 +1060,11 @@ export function updateGraph(testCases: TestCases) {
 export function resizeGraph(width: number, height: number) {
   canvasWidth = width;
   canvasHeight = height;
+  
+  // Save positions after resize if persistence is enabled
+  if (settings.persistNodePositions) {
+    saveNodePositions(currentTestCaseId);
+  }
 }
 
 export function updateDirected(d: boolean) {
@@ -1470,6 +1643,12 @@ export function animateGraph(
         nodeMap.get(u)!.markColor = settings.markColor;
       }
     }
+    
+    // Save positions immediately when dragging ends if persistence is enabled
+    if (draggedNodes.length > 0 && settings.persistNodePositions) {
+      saveNodePositions(currentTestCaseId);
+    }
+    
     draggedNodes = [];
     canvas.style.cursor = "default";
   });
@@ -1512,6 +1691,14 @@ export function animateGraph(
 
       if (!settings.lockMode) {
         updateVelocities();
+        
+        // Save node positions periodically if persistence is enabled
+        if (settings.persistNodePositions) {
+          // Save positions every 30 frames (roughly every 1/3 second at 90 FPS)
+          if (performance.now() % 300 < 16) { // 16ms is roughly one frame at 90 FPS
+            saveNodePositions(currentTestCaseId);
+          }
+        }
       }
     }, 1000 / FPS);
   };

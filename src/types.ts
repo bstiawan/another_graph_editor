@@ -53,6 +53,7 @@ export interface Settings {
   collisionAvoidance: boolean;
   collisionStrength: number;
   minNodeDistance: number;
+  persistNodePositions: boolean;
 }
 
 export interface ParsedGraph {

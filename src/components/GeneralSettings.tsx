@@ -183,6 +183,32 @@ export function GeneralSettings({ directed, settings, setSettings }: Props) {
         />
 
         <SettingsToggleSection
+          title={settings.language == "en" ? "Persist Node Positions" : "保存节点位置"}
+          leftLabel={settings.language == "en" ? "Off" : "关闭"}
+          rightLabel={settings.language == "en" ? "On" : "开启"}
+          toggleId={"settingsPersistNodePositions"}
+          settingsName={"persistNodePositions"}
+          settings={settings}
+          setSettings={setSettings}
+        />
+
+        {settings.persistNodePositions && (
+          <div className="flex justify-center">
+            <button
+              className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md text-sm transition-colors"
+              onClick={() => {
+                // Import and call the reset function
+                import("./animateGraph").then(({ resetNodePositions }) => {
+                  resetNodePositions(0); // Default to first test case
+                });
+              }}
+            >
+              {settings.language == "en" ? "Reset Positions" : "重置位置"}
+            </button>
+          </div>
+        )}
+
+        <SettingsToggleSection
           title={
             settings.language == "en"
               ? "Mark/Unmark Nodes on Click"

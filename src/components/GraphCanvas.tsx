@@ -8,7 +8,7 @@ import { GraphPalette } from "./GraphPalette";
 import { updateDirected } from "./animateGraph";
 import { updateSettings } from "./animateGraph";
 import { animateGraph } from "./animateGraph";
-import { edgeLabelPositions, nodePositions } from "./animateGraph";
+import { edgeLabelPositions, nodePositions, setCurrentTestCaseId } from "./animateGraph";
 
 import { resizeGraph } from "./animateGraph";
 import { updateGraph } from "./animateGraph";
@@ -347,6 +347,7 @@ export function GraphCanvas({
 
   useEffect(() => {
     updateGraph(testCases);
+    setCurrentTestCaseId(currentId);
   }, [testCases]);
 
   useEffect(() => {
@@ -356,6 +357,10 @@ export function GraphCanvas({
   useEffect(() => {
     updateSettings(settings);
   }, [settings]);
+
+  useEffect(() => {
+    setCurrentTestCaseId(currentId);
+  }, [currentId]);
 
   useEffect(() => {
     resizeCanvasMain();

@@ -158,6 +158,10 @@ function App() {
       localStorage.getItem("minNodeDistance") !== null
         ? Number.parseFloat(localStorage.getItem("minNodeDistance")!)
         : 2.5,
+    persistNodePositions:
+      localStorage.getItem("persistNodePositions") !== null
+        ? localStorage.getItem("persistNodePositions") === "true"
+        : true,
   });
 
   const [init, setInit] = useState<boolean>(false);

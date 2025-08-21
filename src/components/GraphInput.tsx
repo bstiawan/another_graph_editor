@@ -483,12 +483,7 @@ export function GraphInput({
               : "hidden"
           }
         >
-          {/* Edge input rows */}
-          <div id={`edgeInputs${inputId}`} className="space-y-2">
-            {/* Edge rows will be dynamically added here */}
-          </div>
-          
-          {/* Add button row */}
+          {/* Add button row - moved above edge list */}
           <div className="flex justify-between items-center">
             <button
               className="bg-clear-normal hover:bg-clear-hover
@@ -497,6 +492,11 @@ export function GraphInput({
             >
               {settings.language == "en" ? "Add Edge" : "添加边"}
             </button>
+          </div>
+          
+          {/* Edge input rows */}
+          <div id={`edgeInputs${inputId}`} className="space-y-2">
+            {/* Edge rows will be dynamically added here */}
           </div>
         </div>
 
